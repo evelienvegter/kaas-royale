@@ -22,8 +22,9 @@ Een ratje rent door een schatkamer vol lekkers. Gemaakt voor de telefoon (houd h
 - Opstapjes in de vloer: springen
 - De grote voet: komt elke 14 seconden, spring als je een rode ! ziet
 - Nieuwe ratjes vrijspelen bij 50, 150, 300 en 500 punten (Radio, de radioactieve rat)
-- Level 1 is de schatkamer. Na 600 meter kom je bij de put: daar val je in level 2, het riool
+- Level 1 is de schatkamer. Bij 500 punten komt de put: daar val je in level 2, het riool
   (met poep, wc-papier, rioolbuizen en groen rioolwater in de gaten)
+- Heb je level 2 een keer gehaald, dan kies je in het menu zelf of je in level 1 of level 2 begint
 
 ## Zelf aanpassen
 
