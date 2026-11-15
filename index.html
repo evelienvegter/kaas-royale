@@ -1,0 +1,1119 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#2a1606">
+<title>Kaas Royale</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #2a1606; overflow: hidden;
+    touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  canvas { display: block; width: 100vw; height: 100vh; height: 100dvh; }
+</style>
+</head>
+<body>
+<canvas id="spel"></canvas>
+<script>
+// =====================================================================
+//  KAAS ROYALE - versie 4
+//  Een ratje rent door een schatkamer vol lekkers.
+//  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
+//  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
+// =====================================================================
+
+// ----- Getallen om mee te spelen: verander ze en kijk wat er gebeurt! -----
+const INSTELLINGEN = {
+  startSnelheid: 260,      // hoe snel het ratje begint (pixels per seconde)
+  versnelling: 5,          // hoeveel sneller het elke seconde gaat
+  maxSnelheid: 650,        // sneller dan dit wordt het niet
+  springKracht: 640,       // hoe hoog je springt
+  dubbelSprongKracht: 650, // hoe hoog de tweede sprong in de lucht is
+  zwaartekracht: 1800,     // hoe hard je weer naar beneden valt
+  bukTijd: 0.8,            // hoeveel seconden je bukt na omlaag vegen
+  kansOpGoud: 0.08,        // kans op gouden kaas (0 = nooit, 1 = altijd)
+  puntenGoud: 5,           // punten voor gouden kaas
+  snoepjeElke: 18,         // om de hoeveel seconden er ongeveer een superlolly komt
+  boostDuur: 5,            // hoeveel seconden de superkracht duurt
+  boostSnelheid: 1.5,      // hoeveel keer zo snel je gaat met superkracht
+  gatKans: 0.18,           // kans dat er een gat met trampoline komt (0 tot 1)
+  gatLengte: 1.4,          // hoe lang het gat is (in seconden rennen)
+  vliegZwaartekracht: 600, // lager = langer zweven na de trampoline
+  kleinGatKans: 0.15,      // kans op een klein gat waar je overheen springt
+  boomstamKans: 0.12,      // kans op een boomstam (alleen met 2x springen eroverheen)
+  hoogteVerschil: 45,      // hoe hoog een opstapje in de vloer is
+  voetElke: 14,            // om de hoeveel seconden de grote voet komt
+  voetDuur: 8,             // hoeveel seconden de voet achter je aan zit
+};
+
+// ----- De ratjes: bij genoeg punten (je record) speel je een nieuw ratje vrij -----
+const RATJES = [
+  { naam: 'Snuf',   nodig: 0,   vacht: '#9b9b9b', buik: '#dcdcdc', roze: '#f2a7b5' },
+  { naam: 'Pepper', nodig: 50,  vacht: '#7a4a2a', buik: '#c99f78', roze: '#f2a7b5' },
+  { naam: 'Ninja',  nodig: 150, vacht: '#2b2b33', buik: '#55556a', roze: '#f2a7b5', band: '#e02424' },
+  { naam: 'Goudje', nodig: 300, vacht: '#d9a520', buik: '#f6dd8a', roze: '#f7b3c0', kroon: true },
+];
+
+// ----- Het lekkers in de schatkamer -----
+const LEKKERS = ['🧀', '🍰', '🍪', '🍩', '🍓', '🧁', '🍫', '🥐', '🍕'];
+const SUPERSNOEPJE = '🍭';
+
+// =====================================================================
+//  Vanaf hier: de motor van het spel
+// =====================================================================
+const canvas = document.getElementById('spel');
+const ctx = canvas.getContext('2d');
+const H = 400;          // het spel is altijd 400 hoog; de breedte past zich aan
+const G = H - 70;       // hoogte van de vloer
+const EMOJI = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+let W = 700, schaal = 1;
+
+function maatAanpassen() {
+  const dpr = window.devicePixelRatio || 1;
+  const bw = window.innerWidth, bh = window.innerHeight;
+  schaal = bh / H;
+  W = bw / schaal;
+  canvas.width = Math.round(bw * dpr);
+  canvas.height = Math.round(bh * dpr);
+  ctx.setTransform(schaal * dpr, 0, 0, schaal * dpr, 0, 0);
+}
+window.addEventListener('resize', maatAanpassen);
+maatAanpassen();
+
+// ----- Toestand van het spel -----
+let toestand = 'menu';   // 'menu', 'spelen' of 'af'
+let rat, dingen = [], lekkers = [], deeltjes = [], gaten = [];
+let snelheid, afstand, score, volgendObstakel, volgendLekker, volgendSnoepje, springBuffer, luchtersGezien;
+let gatenGezien, tijdSindsGat, stammenGezien, voetenGezien;
+let vloer = [], voet = { actief: false }, voetTimer = 0;
+let scrollX = 0, tijd = 0, afSinds = 0, schudden = 0, oorzaak = '', nieuwRecord = false, vrijgespeeld = [];
+let melding = '', meldingTijd = 0;
+let record = Number(localStorage.getItem('kaasRoyaleRecord')) || 0;
+let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
+if (!RATJES[gekozen] || RATJES[gekozen].nodig > record) gekozen = 0;
+let omlaagIngedrukt = false, vingerOmlaag = false;
+
+const RAT_X = 140;        // waar het ratje rent
+
+function nieuwSpel() {
+  rat = { x: RAT_X, y: G, vy: 0, opGrond: true, dubbel: false, vliegt: false, bukken: 0, fase: 0, boost: 0, onkwetsbaar: 0, coyote: 0 };
+  dingen = []; lekkers = []; deeltjes = []; gaten = [];
+  snelheid = INSTELLINGEN.startSnelheid;
+  afstand = 0; score = 0; springBuffer = 0; luchtersGezien = 0; gatenGezien = 0; tijdSindsGat = 0;
+  stammenGezien = 0; voetenGezien = 0;
+  vloer = [{ x: -200, w: W + 900, h: 0 }];
+  vloerAanvullen();
+  voet = { actief: false };
+  voetTimer = INSTELLINGEN.voetElke;
+  volgendObstakel = 1.4; volgendLekker = 0.4;
+  volgendSnoepje = willekeurig(8, 12);   // de eerste komt wat sneller
+  nieuwRecord = false; vrijgespeeld = [];
+  toestand = 'spelen';
+}
+
+const willekeurig = (a, b) => a + Math.random() * (b - a);
+const kies = lijst => lijst[Math.floor(Math.random() * lijst.length)];
+function hash(i) { const s = Math.sin(i * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); }
+
+// ----- Geluid (gemaakt met de computer, geen bestanden nodig) -----
+let audio = null;
+function startAudio() {
+  if (!audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  if (audio && audio.state === 'suspended') audio.resume();
+}
+function piep(toon, duur, soort = 'square', volume = 0.07, glijNaar = 0, wacht = 0) {
+  if (!audio) return;
+  const t = audio.currentTime + wacht;
+  const o = audio.createOscillator(), g = audio.createGain();
+  o.type = soort;
+  o.frequency.setValueAtTime(toon, t);
+  if (glijNaar) o.frequency.exponentialRampToValueAtTime(glijNaar, t + duur);
+  g.gain.setValueAtTime(volume, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + duur);
+  o.connect(g); g.connect(audio.destination);
+  o.start(t); o.stop(t + duur);
+}
+
+// ----- Besturing -----
+function springen() {
+  if (toestand !== 'spelen') return;
+  if (rat.opGrond || (rat.coyote > 0 && !rat.vliegt)) {
+    rat.vy = -INSTELLINGEN.springKracht;
+    rat.opGrond = false;
+    rat.coyote = 0;
+    rat.dubbel = false;
+    rat.bukken = 0;
+    piep(320, 0.15, 'square', 0.05, 640);
+  } else if (!rat.dubbel) {
+    // tweede tik in de lucht: nog een keer omhoog
+    rat.vy = -INSTELLINGEN.dubbelSprongKracht;
+    rat.dubbel = true;
+    rat.bukken = 0;
+    piep(480, 0.15, 'square', 0.05, 960);
+    for (let i = 0; i < 6; i++) deeltjes.push({ x: rat.x - 5, y: rat.y, vx: willekeurig(-90, 90), vy: willekeurig(20, 90), leven: 0.35, wolkje: true });
+  } else {
+    springBuffer = 0.12; // net te vroeg getikt? dan springt hij zodra hij landt
+  }
+}
+function bukken() {
+  if (toestand !== 'spelen') return;
+  rat.bukken = INSTELLINGEN.bukTijd;
+  if (!rat.opGrond && !rat.vliegt) rat.vy = Math.max(rat.vy, 700); // snel naar beneden
+  piep(220, 0.1, 'triangle', 0.05, 140);
+}
+
+// Welk vakje in het menu hoort bij deze plek?
+function menuVakje(x) {
+  return Math.max(0, Math.min(RATJES.length - 1, Math.floor(x / (W / RATJES.length))));
+}
+function tikBuitenSpel(x) {
+  startAudio();
+  if (toestand === 'menu') {
+    const i = menuVakje(x), k = RATJES[i];
+    if (record >= k.nodig) {
+      gekozen = i;
+      localStorage.setItem('kaasRoyaleRatje', String(i));
+      nieuwSpel();
+    } else {
+      melding = '🔒 ' + k.naam + ': haal eerst ' + k.nodig + ' punten';
+      meldingTijd = 2.2;
+      piep(180, 0.15, 'square', 0.05);
+    }
+  } else if (toestand === 'af' && afSinds > 0.7) {
+    toestand = 'menu';
+  }
+}
+
+let veegStartY = null, geveegd = false;
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  startAudio();
+  const t = e.changedTouches[0];
+  if (toestand !== 'spelen') { tikBuitenSpel(t.clientX / schaal); veegStartY = null; return; }
+  veegStartY = t.clientY; geveegd = false;
+}, { passive: false });
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (veegStartY === null || geveegd) return;
+  if (e.changedTouches[0].clientY - veegStartY > 20) { geveegd = true; vingerOmlaag = true; bukken(); }
+}, { passive: false });
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (veegStartY !== null && !geveegd) springen();
+  veegStartY = null; vingerOmlaag = false;
+}, { passive: false });
+canvas.addEventListener('mousedown', e => {
+  if (toestand !== 'spelen') tikBuitenSpel(e.clientX / schaal); else springen();
+});
+window.addEventListener('keydown', e => {
+  if (['Space', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
+  if (toestand !== 'spelen') {
+    const cijfer = Number(e.key);
+    if (cijfer >= 1 && cijfer <= RATJES.length) tikBuitenSpel((cijfer - 0.5) * W / RATJES.length);
+    else if (e.code === 'Space' || e.code === 'Enter') tikBuitenSpel((gekozen + 0.5) * W / RATJES.length);
+    return;
+  }
+  if ((e.code === 'Space' || e.code === 'ArrowUp') && !e.repeat) springen();
+  if (e.code === 'ArrowDown') { if (!omlaagIngedrukt) bukken(); omlaagIngedrukt = true; }
+});
+window.addEventListener('keyup', e => { if (e.code === 'ArrowDown') omlaagIngedrukt = false; });
+
+// ----- De vloer: stukken met verschillende hoogtes -----
+function vloerHoogte(x) {
+  for (const s of vloer) if (x >= s.x && x < s.x + s.w) return s.h;
+  return 0;
+}
+function vloerY(x) { return G - vloerHoogte(x); }
+function grondY(x) { return boveGat(x) ? Infinity : vloerY(x); }
+
+// Maakt steeds nieuwe stukken vloer, ver buiten beeld
+function vloerAanvullen() {
+  const stap = INSTELLINGEN.hoogteVerschil;
+  let laatste = vloer[vloer.length - 1];
+  while (laatste.x + laatste.w < W + 1600) {
+    let h = 0;
+    if (afstand + laatste.x > 2000 && Math.random() < 0.75) {
+      h = kies([0, stap, stap * 2].filter(k => k <= laatste.h + stap)); // nooit meer dan 1 opstapje omhoog
+    }
+    laatste = { x: laatste.x + laatste.w, w: willekeurig(450, 1000), h };
+    vloer.push(laatste);
+  }
+}
+function knipVloer(x) {
+  const i = vloer.findIndex(s => x > s.x && x < s.x + s.w);
+  if (i < 0) return;
+  const s = vloer[i];
+  vloer.splice(i + 1, 0, { x, w: s.x + s.w - x, h: s.h });
+  s.w = x - s.x;
+}
+// Maakt de vloer van x1 tot x2 vlak (voor obstakels en gaten) en geeft de hoogte terug (als y)
+function maakVlak(x1, x2) {
+  const h = vloerHoogte(x1);
+  knipVloer(x1); knipVloer(x2);
+  vloer.forEach(s => { if (s.x >= x1 && s.x < x2) s.h = h; });
+  for (let i = 1; i < vloer.length; i++) {
+    const max = vloer[i - 1].h + INSTELLINGEN.hoogteVerschil;
+    if (vloer[i].x >= x2 && vloer[i].h > max) vloer[i].h = max;
+  }
+  return G - h;
+}
+
+// ----- Obstakels en lekkers maken -----
+const NIEUW_X = () => W + 120;   // nieuwe dingen beginnen hier, net buiten beeld
+
+function maakObstakel(soort) {
+  const x = NIEUW_X();
+  if (!soort) soort = kies(['val', 'val', 'kist', 'kist', 'luchter']);
+  let o;
+  if (soort === 'val') o = { soort, x, w: 52, h: 22 };
+  else if (soort === 'kist') o = { soort, x, w: 46, h: 40 };
+  else if (soort === 'luchter') o = { soort, x, w: 62, h: 0, nummer: ++luchtersGezien };
+  else o = { soort: 'stam', x, w: 108, h: 108, r: 54, nummer: ++stammenGezien };
+  o.v = maakVlak(W + 5, x + o.w + 240);   // vlak tot een stuk na het obstakel, zodat je eerst kunt landen
+  dingen.push(o);
+  const v = o.v;
+
+  // Een boogje lekkers als beloning voor wie goed springt of bukt
+  if (o.soort === 'luchter') {
+    for (let i = 0; i < 3; i++) maakLekker(x + 6 + i * 25, v - 12);
+  } else if (o.soort === 'stam') {
+    volgendObstakel = willekeurig(1.7, 2.3); // ruimte om te landen
+    maakLekker(x + o.w / 2 - 30, v - o.h - 55);
+    maakLekker(x + o.w / 2 + 30, v - o.h - 55);
+  } else if (Math.random() < 0.6) {
+    maakLekker(x - 50, v - 70);
+    maakLekker(x + o.w / 2, v - 120);
+    maakLekker(x + o.w + 50, v - 70);
+  }
+}
+
+// Een klein gat in de vloer: daar spring je gewoon overheen
+function maakKleinGat() {
+  const x = NIEUW_X();
+  const w = Math.max(100, snelheid * 0.4);
+  const v = maakVlak(W + 5, x + w + 160);
+  gaten.push({ x, w, v, trampX: null });
+  volgendObstakel = (w + 320) / snelheid;
+  maakLekker(x + 10, v - 70);
+  maakLekker(x + w / 2, v - 105);
+  maakLekker(x + w - 10, v - 70);
+}
+
+// Een groot gat in de vloer, met ervoor een trampoline die je eroverheen lanceert
+function maakGat() {
+  const trampX = NIEUW_X(), trampW = 56;
+  const x = trampX + trampW + 40;
+  const w = snelheid * INSTELLINGEN.gatLengte;
+  const v = maakVlak(W + 5, x + w + 260);
+  gaten.push({ x, w, v, trampX, trampW, indruk: 0, nummer: ++gatenGezien });
+  tijdSindsGat = 0;
+  volgendObstakel = (trampW + 40 + w + 420) / snelheid;
+
+  // Een boog lekkers precies langs de vliegroute
+  const start = trampX - 32;
+  const T = (x + w + 60 - start) / snelheid;
+  const vy = INSTELLINGEN.vliegZwaartekracht * T / 2;
+  for (let k = 1; k <= 7; k++) {
+    const t = T * k / 8;
+    const hoogte = vy * t - INSTELLINGEN.vliegZwaartekracht * t * t / 2;
+    maakLekker(start + 30 + snelheid * t, v - 22 - hoogte);
+  }
+}
+function boveGat(x) {
+  if (rat && rat.boost > 0) return false; // met superkracht ren je over een regenboog
+  return gaten.some(g => x > g.x + 4 && x < g.x + g.w - 4);
+}
+
+// ----- De grote voet -----
+const VOET_B = 120;   // hoe lang de schoen is
+function voetRust() { return rat.x - 60 - VOET_B; }
+function startVoet() {
+  voet = { actief: true, tijd: INSTELLINGEN.voetDuur, x: -VOET_B - 80, fase: 'komt', t: 0, volgende: 1.6, nummer: ++voetenGezien };
+  deeltjes.push({ x: W / 2, y: 120, vy: 0, leven: 1.6, tekst: 'DE VOET KOMT! 🦶', groot: true });
+  piep(90, 0.5, 'sawtooth', 0.08, 60);
+}
+// De voet trapt alleen als er verder niets aankomt, anders is het niet eerlijk
+function ietsDichtbij() {
+  const van = rat.x - 60, tot = rat.x + 320;
+  if (rat.vliegt || !rat.opGrond) return true;
+  if (dingen.some(o => o.x < tot && o.x + o.w > van)) return true;
+  if (gaten.some(g => (g.trampX === null ? g.x : g.trampX) < tot && g.x + g.w > van)) return true;
+  return vloer.some(s => s.x > van && s.x < tot);   // een opstapje
+}
+function voetBijwerken(dt) {
+  voetTimer -= dt;
+  if (!voet.actief) {
+    if (voetTimer <= 0) { startVoet(); voetTimer = INSTELLINGEN.voetElke; }
+    return;
+  }
+  voet.tijd -= dt;
+  voet.t += dt;
+  const rust = voetRust();
+  const oudeTil = voet.til || 0;
+
+  if (voet.fase === 'komt') {
+    voet.x = Math.min(rust, voet.x + 320 * dt);
+    if (voet.x >= rust) { voet.fase = 'loopt'; voet.t = 0; }
+  } else if (voet.fase === 'loopt') {
+    voet.x = rust;
+    voet.volgende -= dt;
+    if (voet.tijd <= 0) { voet.fase = 'gaat'; }
+    else if (voet.volgende <= 0) {
+      if (ietsDichtbij()) voet.volgende = 0.25;
+      else { voet.fase = 'aanloop'; voet.t = 0; }
+    }
+  } else if (voet.fase === 'aanloop') {
+    voet.x = rust - 50 * Math.min(1, voet.t / 0.55);
+    if (voet.t >= 0.6) { voet.fase = 'trap'; voet.t = 0; piep(200, 0.2, 'sawtooth', 0.06, 90); }
+  } else if (voet.fase === 'trap') {
+    const doel = rat.x + 50 - VOET_B;
+    voet.x = rust - 50 + (doel - rust + 50) * Math.min(1, voet.t / 0.22);
+    if (voet.t >= 0.3) { voet.fase = 'terug'; voet.t = 0; }
+  } else if (voet.fase === 'terug') {
+    voet.x += (rust - voet.x) * Math.min(1, 8 * dt);
+    if (voet.t >= 0.45) { voet.fase = 'loopt'; voet.t = 0; voet.volgende = willekeurig(1.3, 2.1); }
+  } else if (voet.fase === 'gaat') {
+    voet.x -= 360 * dt;
+    if (voet.x < -VOET_B - 100) voet = { actief: false };
+    return;
+  }
+
+  // stampen tijdens het lopen
+  voet.til = (voet.fase === 'komt' || voet.fase === 'loopt') ? Math.abs(Math.sin(tijd * 5)) * 26 : 0;
+  if (oudeTil > 4 && voet.til <= 4) { schudden = Math.max(schudden, 0.08); piep(70, 0.15, 'sine', 0.12); }
+}
+function voetVak() {
+  const y = vloerY(rat.x);
+  return { l: voet.x + 10, r: voet.x + VOET_B - 4, b: y - 30, o: y };
+}
+
+function maakLekker(x, y) {
+  const goud = Math.random() < INSTELLINGEN.kansOpGoud;
+  lekkers.push({ x, y, soort: goud ? '🧀' : kies(LEKKERS), goud, fase: Math.random() * 6 });
+}
+
+// ----- Botsen -----
+function ratVak(r, bukt) {
+  return bukt
+    ? { l: r.x - 24, r: r.x + 40, b: r.y - 17, o: r.y }
+    : { l: r.x - 20, r: r.x + 36, b: r.y - 36, o: r.y };
+}
+function obstakelVak(o) {
+  if (o.soort === 'luchter') return { l: o.x + 4, r: o.x + o.w - 4, b: 0, o: o.v - 30 };
+  return { l: o.x + 4, r: o.x + o.w - 4, b: o.v - o.h + 3, o: o.v };
+}
+const raakt = (a, b) => a.l < b.r && a.r > b.l && a.b < b.o && a.o > b.b;
+function botst(vak, o) {
+  if (o.soort !== 'stam') return raakt(vak, obstakelVak(o));
+  // de boomstam is rond: kijk hoe dicht het ratje bij het midden komt
+  const cx = o.x + o.r, cy = o.v - o.r;
+  const px = Math.max(vak.l, Math.min(cx, vak.r)), py = Math.max(vak.b, Math.min(cy, vak.o));
+  return Math.hypot(px - cx, py - cy) < o.r - 5;
+}
+
+function ratBukt() { return rat.bukken > 0 || omlaagIngedrukt || vingerOmlaag; }
+
+// ----- Bijwerken, elk beeldje opnieuw -----
+function bijwerken(dt) {
+  tijd += dt;
+  schudden = Math.max(0, schudden - dt);
+  meldingTijd = Math.max(0, meldingTijd - dt);
+  deeltjes.forEach(d => { d.y += d.vy * dt; d.x += (d.vx || 0) * dt; d.leven -= dt; });
+  deeltjes = deeltjes.filter(d => d.leven > 0);
+
+  if (toestand === 'menu') { scrollX += 40 * dt; return; }
+  if (toestand === 'af') { afSinds += dt; return; }
+
+  snelheid = Math.min(INSTELLINGEN.maxSnelheid, snelheid + INSTELLINGEN.versnelling * dt);
+  const dx = snelheid * (rat.boost > 0 ? INSTELLINGEN.boostSnelheid : 1) * dt;
+  afstand += dx;
+  scrollX += dx;
+
+  // Superkracht en knipperen daarna
+  if (rat.boost > 0) {
+    rat.boost -= dt;
+    if (Math.random() < 0.6) deeltjes.push({ x: rat.x - 20, y: rat.y - willekeurig(5, 35), vx: -200, vy: willekeurig(-30, 30), leven: 0.4, regenboog: true });
+    if (rat.boost <= 0) { rat.boost = 0; rat.onkwetsbaar = 1.2; piep(600, 0.3, 'triangle', 0.06, 300); }
+  }
+  rat.onkwetsbaar = Math.max(0, rat.onkwetsbaar - dt);
+
+  // Het ratje
+  const vorigeY = rat.y;
+  rat.vy += (rat.vliegt ? INSTELLINGEN.vliegZwaartekracht : INSTELLINGEN.zwaartekracht) * dt;
+  rat.y += rat.vy * dt;
+  if (rat.opGrond) rat.coyote = 0.1;   // net van een randje af? dan mag je nog even springen
+  rat.coyote = Math.max(0, rat.coyote - dt);
+  rat.opGrond = false;
+  // het ratje staat op de hoogste vloer onder zijn achter- of voorpootjes
+  const steun = Math.min(grondY(rat.x - 10), grondY(rat.x + 30));
+  // landen kan alleen als je vlak hiervoor nog boven de vloer was (anders zit je al in een gat)
+  if (rat.y >= steun && vorigeY <= steun + 2) {
+    rat.y = steun; rat.vy = 0; rat.opGrond = true; rat.dubbel = false; rat.vliegt = false;
+    if (springBuffer > 0) { springBuffer = 0; springen(); }
+  }
+  if (rat.y > H + 40) { af('gat'); return; }
+
+  // Tegen een opstapje aan gelopen?
+  const voorX = rat.x + 38;
+  if (!boveGat(voorX) && vloerY(voorX) < rat.y - 4) {
+    const bijnaBoven = rat.y - vloerY(voorX) <= 24 && rat.vy >= 0;   // net te laag geland? dan klautert hij erop
+    if (rat.boost > 0 || rat.onkwetsbaar > 0 || bijnaBoven) {
+      rat.y = vloerY(voorX); rat.vy = 0; rat.opGrond = true; rat.dubbel = false; rat.vliegt = false;
+    }
+    else { af(boveGat(rat.x) || boveGat(rat.x - 10) ? 'gat' : 'muur'); return; }
+  }
+
+  // Op de trampoline? Dan vlieg je over het gat
+  for (const g of gaten) {
+    if (g.trampX === null) continue;
+    g.indruk = Math.max(0, g.indruk - dt);
+    const opTrampoline = rat.x + 36 > g.trampX + 4 && rat.x - 20 < g.trampX + g.trampW - 4;
+    if (opTrampoline && rat.vy >= 0 && rat.y >= g.v - 20 && !rat.vliegt) {
+      const T = (g.x + g.w + 60 - rat.x) / snelheid;
+      rat.vy = -INSTELLINGEN.vliegZwaartekracht * T / 2;
+      rat.vliegt = true; rat.opGrond = false; rat.dubbel = true; rat.bukken = 0;
+      g.indruk = 0.3;
+      piep(140, 0.45, 'sine', 0.14, 700);
+      deeltjes.push({ x: g.trampX + g.trampW / 2, y: g.v - 40, vy: -60, leven: 0.8, tekst: 'BOING!', goud: true });
+    }
+  }
+  springBuffer = Math.max(0, springBuffer - dt);
+  rat.bukken = Math.max(0, rat.bukken - dt);
+  if (rat.opGrond) rat.fase += dx / 14;
+
+  // Nieuwe dingen maken
+  tijdSindsGat += dt;
+  volgendObstakel -= dt;
+  if (volgendObstakel <= 0) {
+    volgendObstakel = willekeurig(0.95, 1.8);
+    const r = Math.random(), I = INSTELLINGEN;
+    if (afstand > 2500 && tijdSindsGat > 9 && r < I.gatKans) maakGat();
+    else if (afstand > 1200 && r < I.gatKans + I.kleinGatKans) maakKleinGat();
+    else if (afstand > 1800 && r < I.gatKans + I.kleinGatKans + I.boomstamKans) maakObstakel('stam');
+    else maakObstakel();
+  }
+  const bezet = x => dingen.some(o => x > o.x - 60 && x < o.x + o.w + 60)
+    || gaten.some(g => x > (g.trampX === null ? g.x : g.trampX) - 40 && x < g.x + g.w + 40);
+  volgendLekker -= dt;
+  if (volgendLekker <= 0) {
+    const x = W + 30;
+    if (!bezet(x)) maakLekker(x, vloerY(x) - (Math.random() < 0.6 ? 22 : 95));
+    volgendLekker = willekeurig(0.35, 0.9);
+  }
+  volgendSnoepje -= dt;
+  if (volgendSnoepje <= 0 && !bezet(W + 30)) {
+    lekkers.push({ x: W + 30, y: vloerY(W + 30) - 115, soort: SUPERSNOEPJE, speciaal: true, fase: 0 });
+    volgendSnoepje = INSTELLINGEN.snoepjeElke * willekeurig(0.8, 1.3);
+  }
+
+  // Alles schuift naar links
+  dingen.forEach(o => { o.x -= dx; });
+  lekkers.forEach(l => { l.x -= dx; });
+  vloer.forEach(s => { s.x -= dx; });
+  vloer = vloer.filter(s => s.x + s.w > -300);
+  vloerAanvullen();
+  gaten.forEach(g => { g.x -= dx; if (g.trampX !== null) g.trampX -= dx; });
+  gaten = gaten.filter(g => g.x + g.w > -80);
+
+  // De grote voet
+  voetBijwerken(dt);
+  if (voet.actief && voet.fase === 'trap' && raakt(ratVak(rat, ratBukt()), voetVak())) {
+    if (rat.boost > 0) {
+      if (!voet.geraakt) { voet.geraakt = true; deeltjes.push({ x: rat.x, y: rat.y - 60, vy: -60, leven: 0.7, tekst: 'HAHA! 🌈', goud: true }); }
+    } else if (rat.onkwetsbaar <= 0) { af('voet'); return; }
+  }
+  if (voet.fase !== 'trap') voet.geraakt = false;
+  dingen = dingen.filter(o => o.x + o.w > -80);
+  lekkers = lekkers.filter(l => l.x > -40 && !l.gepakt);
+
+  // Lekkers pakken
+  const mondX = rat.x + 30, mondY = rat.y - (ratBukt() ? 12 : 22);
+  lekkers.forEach(l => {
+    // met superkracht vliegt het lekkers naar je toe
+    if (rat.boost > 0 && l.x > mondX - 20 && l.x - mondX < 260) {
+      l.x += (mondX - l.x) * Math.min(1, 6 * dt);
+      l.y += (mondY - l.y) * Math.min(1, 6 * dt);
+    }
+    if (Math.hypot(l.x - mondX, l.y - mondY) < 34) pakLekker(l);
+  });
+
+  // Botsen met een obstakel?
+  const mijnVak = ratVak(rat, ratBukt());
+  for (const o of dingen) {
+    if (!botst(mijnVak, o)) continue;
+    if (rat.boost > 0) { kapot(o); continue; }
+    if (rat.onkwetsbaar > 0) continue;
+    af(o.soort);
+    break;
+  }
+  dingen = dingen.filter(o => !o.kapot);
+}
+
+function pakLekker(l) {
+  l.gepakt = true;
+  if (l.speciaal) {
+    rat.boost = INSTELLINGEN.boostDuur;
+    rat.onkwetsbaar = 0;
+    deeltjes.push({ x: l.x, y: l.y - 10, vy: -50, leven: 1.2, tekst: 'SUPERKRACHT!', goud: true });
+    [523, 659, 784, 1047].forEach((t, i) => piep(t, 0.14, 'square', 0.06, 0, i * 0.08));
+    for (let i = 0; i < 16; i++) deeltjes.push({ x: l.x, y: l.y, vx: willekeurig(-200, 200), vy: willekeurig(-200, 100), leven: 0.7, regenboog: true });
+    return;
+  }
+  const punten = (l.goud ? INSTELLINGEN.puntenGoud : 1) * (rat.boost > 0 ? 2 : 1);
+  score += punten;
+  deeltjes.push({ x: l.x, y: l.y, vy: -70, leven: 0.8, tekst: '+' + punten, goud: l.goud });
+  if (l.goud) {
+    piep(988, 0.09, 'triangle', 0.09); piep(1319, 0.09, 'triangle', 0.09, 0, 0.08); piep(1760, 0.15, 'triangle', 0.09, 0, 0.16);
+    for (let i = 0; i < 8; i++) deeltjes.push({ x: l.x, y: l.y, vx: willekeurig(-120, 120), vy: willekeurig(-160, 20), leven: 0.5, ster: true });
+  } else {
+    piep(880, 0.08, 'triangle', 0.08, 1320);
+  }
+}
+
+// Met superkracht ram je dwars door alles heen
+function kapot(o) {
+  o.kapot = true;
+  score += 2;
+  const mx = o.x + o.w / 2, my = o.soort === 'luchter' ? o.v - 50 : o.v - 20;
+  deeltjes.push({ x: mx, y: my - 30, vy: -60, leven: 0.7, tekst: 'BAM! +2', goud: true });
+  for (let i = 0; i < 12; i++) deeltjes.push({ x: mx, y: my, vx: willekeurig(-50, 300), vy: willekeurig(-250, 50), leven: 0.6, ster: true });
+  piep(150, 0.2, 'sawtooth', 0.07, 60);
+  schudden = 0.12;
+}
+
+function af(soort) {
+  toestand = 'af';
+  afSinds = 0;
+  schudden = 0.35;
+  oorzaak = {
+    val: 'Klap! In de muizenval.',
+    kist: 'Bonk! Tegen een schatkist.',
+    luchter: 'Au! Tegen de kroonluchter.',
+    gat: 'Oei! In het gat gevallen.',
+    muur: 'Bonk! Tegen een opstapje.',
+    stam: 'Boink! Tegen de boomstam.',
+    voet: 'Pats! Getrapt door de grote voet.',
+  }[soort];
+  piep(220, 0.45, 'sawtooth', 0.08, 55);
+  vrijgespeeld = RATJES.filter(k => k.nodig > record && k.nodig <= score);
+  if (score > record) {
+    record = score;
+    nieuwRecord = true;
+    localStorage.setItem('kaasRoyaleRecord', String(record));
+  }
+}
+
+// =====================================================================
+//  Tekenen
+// =====================================================================
+function tekenAchtergrond() {
+  const lucht = ctx.createLinearGradient(0, 0, 0, G);
+  lucht.addColorStop(0, '#1f0f04');
+  lucht.addColorStop(1, '#4a2a0e');
+  ctx.fillStyle = lucht;
+  ctx.fillRect(0, 0, W, G);
+
+  // Pilaren met fakkels (bewegen langzaam: ver weg)
+  const p = scrollX * 0.35, tussen = 260;
+  for (let i = Math.floor(p / tussen) - 1; i * tussen - p < W + tussen; i++) {
+    const x = i * tussen - p;
+    ctx.fillStyle = '#3a200b';
+    ctx.fillRect(x, 30, 42, G - 30);
+    ctx.fillStyle = '#4a2a10';
+    ctx.fillRect(x + 6, 30, 8, G - 30);
+    ctx.fillStyle = '#2c1707';
+    ctx.fillRect(x - 6, 22, 54, 14);
+    // fakkel
+    const fy = 120, fx = x + 21, flakker = Math.sin(tijd * 13 + i) * 2 + Math.sin(tijd * 7 + i * 3) * 1.5;
+    const gloed = ctx.createRadialGradient(fx, fy - 10, 2, fx, fy - 10, 70);
+    gloed.addColorStop(0, 'rgba(255,190,80,0.35)');
+    gloed.addColorStop(1, 'rgba(255,190,80,0)');
+    ctx.fillStyle = gloed;
+    ctx.fillRect(fx - 70, fy - 80, 140, 140);
+    ctx.fillStyle = '#6b4a2a';
+    ctx.fillRect(fx - 3, fy, 6, 18);
+    ctx.fillStyle = '#ff9a1f';
+    ctx.beginPath(); ctx.ellipse(fx, fy - 7, 7, 12 + flakker, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffe27a';
+    ctx.beginPath(); ctx.ellipse(fx, fy - 4, 3.5, 7 + flakker / 2, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Bergen goud (bewegen sneller: dichterbij)
+  const q = scrollX * 0.6, tussen2 = 340;
+  for (let i = Math.floor(q / tussen2) - 1; i * tussen2 - q < W + tussen2; i++) {
+    const x = i * tussen2 - q + hash(i) * 120;
+    const w = 60 + hash(i + 50) * 50, h = 30 + hash(i + 90) * 30;
+    ctx.fillStyle = '#9c6f0c';
+    ctx.beginPath(); ctx.ellipse(x, G, w, h, 0, Math.PI, 0); ctx.fill();
+    for (let k = 0; k < 14; k++) {
+      const rx = (hash(i * 31 + k) - 0.5) * 1.7;
+      const cx = x + rx * w;
+      const maxH = h * Math.sqrt(Math.max(0, 1 - rx * rx));
+      const cy = G - hash(i * 17 + k) * maxH * 0.9 - 2;
+      ctx.fillStyle = k % 3 ? '#e8b923' : '#ffd84d';
+      ctx.beginPath(); ctx.ellipse(cx, cy, 7, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    // een edelsteen bovenop
+    const kleuren = ['#e0315a', '#2fb7e0', '#3ccf6e', '#a35be8'];
+    ctx.fillStyle = kleuren[Math.abs(i) % 4];
+    ctx.beginPath();
+    ctx.moveTo(x, G - h - 12); ctx.lineTo(x + 8, G - h - 2); ctx.lineTo(x, G - h + 6); ctx.lineTo(x - 8, G - h - 2);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillRect(x - 2, G - h - 7, 3, 3);
+  }
+
+  // Vloer, in stukken met verschillende hoogtes
+  const stukken = toestand === 'menu' ? [{ x: -10, w: W + 20, h: 0 }] : vloer;
+  const t = scrollX % 64;
+  for (const st of stukken) {
+    if (st.x > W || st.x + st.w < 0) continue;
+    const y = G - st.h;
+    ctx.fillStyle = '#3b2410';
+    ctx.fillRect(st.x, y, st.w + 1, H - y);
+    ctx.fillStyle = '#d4a017';
+    ctx.fillRect(st.x, y, st.w + 1, 3);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(st.x, y, st.w, H - y); ctx.clip();
+    ctx.strokeStyle = '#2c1a0b'; ctx.lineWidth = 2;
+    for (let x = -t - 64; x < W + 64; x += 64) {
+      ctx.beginPath(); ctx.moveTo(x, y + 3); ctx.lineTo(x, y + 32); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + 32, y + 32); ctx.lineTo(x + 32, H); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(st.x, y + 32); ctx.lineTo(st.x + st.w, y + 32); ctx.stroke();
+    ctx.restore();
+  }
+  // gouden randje bij elk opstapje
+  for (let i = 1; i < stukken.length; i++) {
+    const a = stukken[i - 1], b = stukken[i];
+    if (a.h === b.h || b.x < -10 || b.x > W + 10) continue;
+    ctx.fillStyle = '#d4a017';
+    ctx.fillRect(b.x - 2, G - Math.max(a.h, b.h), 3, Math.abs(a.h - b.h) + 3);
+  }
+}
+
+function tekenRat(x, y, k, bukt, fase, grootte = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(grootte, grootte);
+  const plat = bukt ? 0.55 : 1;
+  const wieg = bukt ? 0 : Math.sin(fase * 2) * 1.2;
+
+  // schaduw
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(6, 1, 30, 4, 0, 0, Math.PI * 2); ctx.fill();
+
+  // staart
+  ctx.strokeStyle = k.roze; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-22, -12 * plat);
+  ctx.quadraticCurveTo(-42, -2 + Math.sin(fase) * 6, -58, -18 * plat + Math.sin(fase + 1) * 7);
+  ctx.stroke();
+
+  // pootjes
+  ctx.fillStyle = k.roze;
+  const s = Math.sin(fase) * 6;
+  [[-12, s], [14, -s]].forEach(([px, d]) => {
+    ctx.beginPath(); ctx.ellipse(px + d, -2, 6, 3, 0, 0, Math.PI * 2); ctx.fill();
+  });
+
+  // lijf
+  ctx.fillStyle = k.vacht;
+  ctx.beginPath(); ctx.ellipse(0, -18 * plat + wieg, 26, 16 * plat, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = k.buik;
+  ctx.beginPath(); ctx.ellipse(5, -11 * plat + wieg, 16, 7 * plat, 0, 0, Math.PI * 2); ctx.fill();
+
+  // kop
+  const ky = (bukt ? -10 : -24) + wieg;
+  ctx.fillStyle = k.vacht;
+  ctx.beginPath(); ctx.ellipse(24, ky, 14, bukt ? 9 : 11, 0.15, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(36, ky + 3, 10, 6, 0.2, 0, Math.PI * 2); ctx.fill();
+
+  // hoofdband (Ninja)
+  if (k.band) {
+    ctx.fillStyle = k.band;
+    ctx.fillRect(14, ky - 6, 22, 4);
+    ctx.beginPath(); ctx.moveTo(14, ky - 5); ctx.lineTo(2, ky - 10 + Math.sin(fase * 2) * 3); ctx.lineTo(4, ky - 3); ctx.closePath(); ctx.fill();
+  }
+
+  // oor (plat als hij bukt)
+  const oy = bukt ? ky - 5 : ky - 10, or = bukt ? 6 : 8;
+  ctx.fillStyle = k.vacht;
+  ctx.beginPath(); ctx.arc(17, oy, or, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = k.roze;
+  ctx.beginPath(); ctx.arc(17, oy, or - 3, 0, Math.PI * 2); ctx.fill();
+
+  // kroontje (Goudje)
+  if (k.kroon && !bukt) {
+    ctx.fillStyle = '#ffd23f';
+    ctx.beginPath();
+    ctx.moveTo(22, ky - 9); ctx.lineTo(22, ky - 19); ctx.lineTo(26, ky - 14); ctx.lineTo(30, ky - 21);
+    ctx.lineTo(34, ky - 14); ctx.lineTo(38, ky - 19); ctx.lineTo(37, ky - 8); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#e0315a';
+    ctx.beginPath(); ctx.arc(30, ky - 12, 1.8, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // oog
+  ctx.fillStyle = '#111';
+  ctx.beginPath(); ctx.arc(29, ky - 3, 2.8, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(30, ky - 4, 1, 0, Math.PI * 2); ctx.fill();
+
+  // neus en snorharen
+  ctx.fillStyle = '#e7718a';
+  ctx.beginPath(); ctx.arc(45, ky + 2, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(39, ky + 4); ctx.lineTo(54, ky);
+  ctx.moveTo(39, ky + 5); ctx.lineTo(54, ky + 8);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function tekenSpeler() {
+  const k = RATJES[gekozen];
+  if (rat.boost > 0) {
+    // regenboog-gloed rond het ratje
+    const kleur = 'hsla(' + Math.floor(tijd * 360) % 360 + ',100%,60%,';
+    const gloed = ctx.createRadialGradient(rat.x + 10, rat.y - 20, 5, rat.x + 10, rat.y - 20, 60);
+    gloed.addColorStop(0, kleur + '0.7)');
+    gloed.addColorStop(1, kleur + '0)');
+    ctx.fillStyle = gloed;
+    ctx.fillRect(rat.x - 50, rat.y - 80, 120, 120);
+  }
+  // knipperen na de superkracht
+  if (rat.onkwetsbaar > 0 && Math.floor(tijd * 12) % 2) return;
+  tekenRat(rat.x, rat.y, k, ratBukt(), rat.fase);
+}
+
+function tekenObstakel(o) {
+  if (o.soort === 'val') {
+    const x = o.x, y = o.v;
+    ctx.fillStyle = '#a0612b';
+    ctx.fillRect(x, y - 10, o.w, 10);
+    ctx.fillStyle = '#7a4518';
+    ctx.fillRect(x, y - 3, o.w, 3);
+    ctx.strokeStyle = '#d7dbde'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x + 8, y - 10); ctx.lineTo(x + 8, y - 22); ctx.lineTo(x + o.w - 8, y - 22); ctx.lineTo(x + o.w - 8, y - 10);
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x + o.w / 2, y - 12, 4, 0, Math.PI * 2); ctx.stroke();
+    // lokaas
+    ctx.fillStyle = '#f5c518';
+    ctx.beginPath(); ctx.moveTo(x + o.w / 2 + 6, y - 10); ctx.lineTo(x + o.w / 2 + 16, y - 10); ctx.lineTo(x + o.w / 2 + 16, y - 17); ctx.closePath(); ctx.fill();
+  } else if (o.soort === 'kist') {
+    const x = o.x, y = o.v, w = o.w, h = o.h;
+    ctx.fillStyle = '#6b3a16';
+    ctx.fillRect(x, y - h * 0.65, w, h * 0.65);
+    ctx.fillStyle = '#86491c';
+    ctx.beginPath();
+    ctx.moveTo(x, y - h * 0.65); ctx.lineTo(x, y - h * 0.8);
+    ctx.quadraticCurveTo(x + w / 2, y - h * 1.1, x + w, y - h * 0.8);
+    ctx.lineTo(x + w, y - h * 0.65); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#e0b02a';
+    ctx.fillRect(x + 6, y - h * 0.9, 5, h * 0.9);
+    ctx.fillRect(x + w - 11, y - h * 0.9, 5, h * 0.9);
+    ctx.fillRect(x, y - h * 0.67, w, 3);
+    ctx.fillRect(x + w / 2 - 5, y - h * 0.7, 10, 11);
+    ctx.fillStyle = '#3a1f08';
+    ctx.fillRect(x + w / 2 - 1.5, y - h * 0.62, 3, 4);
+  } else if (o.soort === 'stam') {
+    // een dikke boomstam, van opzij gezien: je kijkt tegen de zaagkant aan
+    const cx = o.x + o.r, cy = o.v - o.r;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(cx, o.v + 2, o.r, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5b3a1e';
+    ctx.beginPath(); ctx.arc(cx, cy, o.r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#d9a86a';
+    ctx.beginPath(); ctx.arc(cx, cy, o.r - 8, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#b07f45'; ctx.lineWidth = 2;
+    for (let k = 1; k <= 4; k++) { ctx.beginPath(); ctx.arc(cx + k, cy - k, (o.r - 8) * k / 5, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.strokeStyle = '#3e2712'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(cx + 6, cy - 4); ctx.lineTo(cx + 26, cy - 22); ctx.stroke();
+    // mosplekje
+    ctx.fillStyle = '#5f8f3a';
+    ctx.beginPath(); ctx.ellipse(cx - 20, cy - o.r + 4, 18, 6, -0.3, 0, Math.PI * 2); ctx.fill();
+    if (o.nummer <= 3) {
+      ctx.globalAlpha = 0.6 + Math.sin(tijd * 10) * 0.4;
+      tekst('2x springen! ⬆⬆', cx, cy - o.r - 22, 18, '#7dff9a');
+      ctx.globalAlpha = 1;
+    }
+  } else {
+    const cx = o.x + o.w / 2, onder = o.v - 30;
+    // schaduw op de vloer als waarschuwing
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(cx, o.v + 2, o.w / 2, 5, 0, 0, Math.PI * 2); ctx.fill();
+    // ketting
+    ctx.strokeStyle = '#8a6d1f'; ctx.lineWidth = 3;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, onder - 30); ctx.stroke();
+    ctx.setLineDash([]);
+    // armen
+    ctx.strokeStyle = '#d4a017'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(o.x + 2, onder - 22); ctx.quadraticCurveTo(cx, onder + 4, o.x + o.w - 2, onder - 22); ctx.stroke();
+    ctx.fillStyle = '#d4a017';
+    ctx.fillRect(cx - 4, onder - 32, 8, 22);
+    // kaarsjes
+    [o.x + 2, cx, o.x + o.w - 2].forEach((kx, i) => {
+      const ky = i === 1 ? onder - 34 : onder - 24;
+      ctx.fillStyle = '#f4ead2';
+      ctx.fillRect(kx - 3, ky - 12, 6, 12);
+      ctx.fillStyle = '#ffb02e';
+      ctx.beginPath(); ctx.ellipse(kx, ky - 16, 3, 5 + Math.sin(tijd * 12 + i) * 1, 0, 0, Math.PI * 2); ctx.fill();
+    });
+    // kristallen
+    ctx.fillStyle = '#bfe9ff';
+    [-20, -7, 7, 20].forEach(d => {
+      const top = onder - 12 + Math.abs(d) * -0.4;
+      ctx.beginPath(); ctx.moveTo(cx + d - 3, top); ctx.lineTo(cx + d + 3, top); ctx.lineTo(cx + d, onder - Math.abs(d) * 0.3); ctx.closePath(); ctx.fill();
+    });
+    // bij de eerste kroonluchters een hint: hier moet je bukken
+    if (o.nummer <= 3) {
+      const knipper = 0.6 + Math.sin(tijd * 10) * 0.4;
+      ctx.globalAlpha = knipper;
+      tekst('⬇ bukken!', cx, o.v + 22, 18, '#7dff9a');
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
+function tekenGat(g) {
+  // het gat zelf: diep en donker
+  const v = g.v;
+  const diepte = ctx.createLinearGradient(0, v, 0, H);
+  diepte.addColorStop(0, '#120802');
+  diepte.addColorStop(1, '#000');
+  ctx.fillStyle = diepte;
+  ctx.fillRect(g.x, v, g.w, H - v);
+  ctx.fillStyle = '#5a3816';
+  ctx.fillRect(g.x - 4, v, 4, H - v);
+  ctx.fillRect(g.x + g.w, v, 4, H - v);
+  ctx.fillStyle = '#d4a017';
+  ctx.fillRect(g.x - 6, v, 6, 3);
+  ctx.fillRect(g.x + g.w, v, 6, 3);
+
+  // met superkracht ren je over een regenboogbrug
+  if (rat.boost > 0) {
+    const kleuren = ['#ff4d4d', '#ffa64d', '#ffe14d', '#5ce65c', '#4db8ff', '#a64dff'];
+    kleuren.forEach((k, i) => { ctx.fillStyle = k; ctx.fillRect(g.x, v + i * 3, g.w, 3); });
+  }
+  if (g.trampX === null) return;
+
+  // de trampoline
+  const tx = g.trampX, tw = g.trampW, indruk = g.indruk > 0 ? 6 * g.indruk / 0.3 : 0;
+  const G = g.v, mat = G - 14 + indruk;   // de trampoline staat op de vloer bij het gat
+  ctx.strokeStyle = '#555'; ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(tx + 6, G); ctx.lineTo(tx + 10, G - 12);
+  ctx.moveTo(tx + tw - 6, G); ctx.lineTo(tx + tw - 10, G - 12);
+  ctx.stroke();
+  ctx.strokeStyle = '#bbb'; ctx.lineWidth = 2;
+  for (let i = 0; i < 5; i++) {
+    const vx = tx + 10 + i * (tw - 20) / 4;
+    ctx.beginPath(); ctx.moveTo(vx, G - 12); ctx.lineTo(vx, mat); ctx.stroke();
+  }
+  ctx.fillStyle = '#1b1b1b';
+  ctx.beginPath(); ctx.ellipse(tx + tw / 2, mat, tw / 2, 5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#e02424'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.ellipse(tx + tw / 2, mat, tw / 2, 5, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = '#2f7de0'; ctx.lineWidth = 2;
+  ctx.setLineDash([5, 5]);
+  ctx.beginPath(); ctx.ellipse(tx + tw / 2, mat, tw / 2, 5, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // bij de eerste gaten een hint
+  if (g.nummer <= 2) {
+    ctx.globalAlpha = 0.6 + Math.sin(tijd * 10) * 0.4;
+    tekst('Trampoline! ⬇', tx + tw / 2, G - 60, 18, '#7dff9a');
+    ctx.globalAlpha = 1;
+  }
+}
+
+function tekenVoet() {
+  if (!voet.actief) return;
+  const vloerOnder = vloerY(rat.x), x = voet.x, til = voet.til || 0;
+  const zool = vloerOnder - til;
+  // been (spijkerbroek) van boven het scherm
+  ctx.fillStyle = '#2f4f86';
+  ctx.fillRect(x + 8, -10, 58, zool - 40);
+  ctx.fillStyle = '#26406d';
+  ctx.fillRect(x + 8, zool - 62, 58, 10);
+  // sok
+  ctx.fillStyle = '#f2f2f2';
+  ctx.fillRect(x + 12, zool - 52, 50, 14);
+  // schoen
+  ctx.fillStyle = '#e02424';
+  ctx.beginPath();
+  ctx.moveTo(x + 6, zool - 8);
+  ctx.lineTo(x + 6, zool - 42);
+  ctx.lineTo(x + 66, zool - 42);
+  ctx.quadraticCurveTo(x + 80, zool - 30, VOET_B + x - 18, zool - 28);
+  ctx.quadraticCurveTo(x + VOET_B + 2, zool - 24, x + VOET_B, zool - 8);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(x + 4, zool - 9, VOET_B - 2, 9);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
+  for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(x + 62 + i * 9, zool - 38 + i * 3); ctx.lineTo(x + 70 + i * 9, zool - 30 + i * 3); ctx.stroke(); }
+  // waarschuwing vlak voor een trap
+  if (voet.fase === 'aanloop' && Math.floor(tijd * 10) % 2) {
+    tekst(voet.nummer <= 1 ? '! SPRING !' : '!', rat.x + 10, rat.y - 70, 30, '#ff4d4d');
+  }
+}
+
+function tekenLekker(l) {
+  const y = l.y + Math.sin(tijd * 4 + l.fase) * 3;
+  if (l.goud || l.speciaal) {
+    const kleur = l.speciaal ? 'hsla(' + Math.floor(tijd * 300) % 360 + ',100%,65%,' : 'rgba(255,230,90,';
+    const r = l.speciaal ? 40 : 30;
+    const gloed = ctx.createRadialGradient(l.x, y, 2, l.x, y, r);
+    gloed.addColorStop(0, kleur + '0.9)');
+    gloed.addColorStop(1, kleur + '0)');
+    ctx.fillStyle = gloed;
+    ctx.fillRect(l.x - r, y - r, r * 2, r * 2);
+  }
+  ctx.save();
+  ctx.translate(l.x, y);
+  if (l.speciaal) ctx.rotate(Math.sin(tijd * 6) * 0.3);
+  ctx.font = (l.speciaal ? 38 : l.goud ? 34 : 28) + 'px ' + EMOJI;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(l.soort, 0, 0);
+  ctx.restore();
+}
+
+function tekenDeeltjes() {
+  deeltjes.forEach(d => {
+    ctx.globalAlpha = Math.min(1, d.leven * 2);
+    if (d.ster) {
+      ctx.fillStyle = '#ffe680';
+      ctx.fillRect(d.x - 2, d.y - 2, 4, 4);
+    } else if (d.regenboog) {
+      ctx.fillStyle = 'hsl(' + Math.floor((d.x + d.y + tijd * 300) % 360) + ',100%,65%)';
+      ctx.beginPath(); ctx.arc(d.x, d.y, 3.5, 0, Math.PI * 2); ctx.fill();
+    } else if (d.wolkje) {
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.beginPath(); ctx.arc(d.x, d.y, 5, 0, Math.PI * 2); ctx.fill();
+    } else if (d.groot) {
+      tekst(d.tekst, d.x, d.y, 34, '#ff6a3d');
+    } else {
+      tekst(d.tekst, d.x, d.y, 20, d.goud ? '#ffe14d' : '#fff');
+    }
+  });
+  ctx.globalAlpha = 1;
+}
+
+function tekst(t, x, y, grootte, kleur = '#fff', uitlijnen = 'center', dik = true) {
+  ctx.font = (dik ? '800 ' : '600 ') + grootte + 'px system-ui, -apple-system, sans-serif';
+  ctx.textAlign = uitlijnen; ctx.textBaseline = 'middle';
+  ctx.lineWidth = grootte / 6; ctx.strokeStyle = 'rgba(30,12,0,0.85)'; ctx.lineJoin = 'round';
+  ctx.strokeText(t, x, y);
+  ctx.fillStyle = kleur;
+  ctx.fillText(t, x, y);
+}
+
+function tekenScore() {
+  tekst('🧀 ' + score, 18, 30, 26, '#ffe14d', 'left');
+  tekst(Math.floor(afstand / 40) + ' m', W / 2, 30, 20, '#fff');
+  tekst('Record ' + record, W - 18, 30, 18, '#ffd27a', 'right', false);
+  if (voet.actief && voet.tijd > 0) tekst('🦶 ' + Math.ceil(voet.tijd), 18, 62, 20, '#ff9a7a', 'left');
+  if (rat.boost > 0) {
+    // balk die laat zien hoe lang de superkracht nog duurt
+    const bw = 200, bx = W / 2 - bw / 2, by = 56;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(bx, by, bw, 12);
+    ctx.fillStyle = 'hsl(' + Math.floor(tijd * 360) % 360 + ',100%,60%)';
+    ctx.fillRect(bx, by, bw * rat.boost / INSTELLINGEN.boostDuur, 12);
+    tekst('🍭 SUPERKRACHT  x2', W / 2, by + 28, 16, '#fff');
+  }
+}
+
+function tekenMenu() {
+  ctx.fillStyle = 'rgba(20,8,0,0.5)';
+  ctx.fillRect(0, 0, W, H);
+  tekst('KAAS ROYALE', W / 2, 58, 50, '#ffd23f');
+  tekst('Ren door de schatkamer en pak al het lekkers!', W / 2, 102, 17, '#fff', 'center', false);
+  tekst(meldingTijd > 0 ? melding : 'Kies je ratje', W / 2, 140, 20, meldingTijd > 0 ? '#ff9a7a' : '#ffe9b0', 'center', meldingTijd <= 0);
+
+  const vak = W / RATJES.length;
+  const grootte = Math.min(1.5, vak / 125);
+  RATJES.forEach((k, i) => {
+    const x = vak * (i + 0.5) - 8 * grootte;
+    const open = record >= k.nodig;
+    if (i === gekozen) {
+      ctx.fillStyle = 'rgba(255,210,63,0.25)';
+      ctx.beginPath(); ctx.ellipse(x + 10 * grootte, G - 2, 55 * grootte, 12, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    if (open) {
+      tekenRat(x, G - 8, k, false, tijd * 4 + i * 2, grootte);
+      tekst(k.naam, x + 10 * grootte, G + 28, 20, '#fff');
+    } else {
+      // nog op slot: alleen een schaduw
+      ctx.globalAlpha = 0.6;
+      tekenRat(x, G - 8, { vacht: '#140a03', buik: '#140a03', roze: '#140a03' }, false, 0, grootte);
+      ctx.globalAlpha = 1;
+      tekst('🔒', x + 5 * grootte, G - 35 * grootte, 24);
+      tekst(k.nodig + ' punten', x + 10 * grootte, G + 28, 17, '#ffd27a', 'center', false);
+    }
+  });
+  tekst('Tik = springen  ·  2x tikken = hoger  ·  veeg omlaag = bukken', W / 2, H - 12, 14, '#e8cfa0', 'center', false);
+}
+
+function tekenAf() {
+  ctx.fillStyle = 'rgba(20,8,0,0.55)';
+  ctx.fillRect(0, 0, W, H);
+  tekst(oorzaak, W / 2, 80, 34, '#ff8a5c');
+  tekst('Je pakte ' + score + ' punten', W / 2, 132, 28, '#ffe14d');
+  if (nieuwRecord) tekst('Nieuw record! 🏆', W / 2, 172, 24, '#7dff9a');
+  else tekst('Record: ' + record, W / 2, 172, 20, '#ffd27a', 'center', false);
+  if (vrijgespeeld.length) {
+    tekst('Nieuw ratje vrijgespeeld: ' + vrijgespeeld.map(k => k.naam).join(' en ') + '! 🐀', W / 2, 214, 22, '#7dd8ff');
+  } else {
+    const volgende = RATJES.find(k => k.nodig > record);
+    if (volgende) tekst('Nog ' + (volgende.nodig - record) + ' punten tot ' + volgende.naam, W / 2, 214, 18, '#e8cfa0', 'center', false);
+  }
+  if (afSinds > 0.7) tekst('Tik om verder te gaan', W / 2, 264, 22, '#fff', 'center', false);
+}
+
+function tekenDraaiTelefoon() {
+  ctx.fillStyle = 'rgba(20,8,0,0.75)';
+  ctx.fillRect(0, 0, W, H);
+  tekst('📱 ↻', W / 2, H / 2 - 40, 44, '#fff');
+  tekst('Draai je telefoon', W / 2, H / 2 + 20, 22, '#ffd23f');
+  tekst('dwars', W / 2, H / 2 + 50, 22, '#ffd23f');
+}
+
+function tekenen() {
+  ctx.save();
+  if (schudden > 0) ctx.translate(willekeurig(-6, 6) * schudden * 3, willekeurig(-6, 6) * schudden * 3);
+  tekenAchtergrond();
+
+  if (toestand !== 'menu') {
+    gaten.forEach(tekenGat);
+    lekkers.forEach(tekenLekker);
+    dingen.forEach(tekenObstakel);
+    tekenVoet();
+    tekenSpeler();
+    tekenDeeltjes();
+    tekenScore();
+  }
+  ctx.restore();
+
+  if (toestand === 'menu') tekenMenu();
+  if (toestand === 'af') tekenAf();
+  if (W < 480) tekenDraaiTelefoon();
+}
+
+// ----- De spellus -----
+let vorige = performance.now();
+function lus(nu) {
+  const dt = Math.min(0.05, (nu - vorige) / 1000);
+  vorige = nu;
+  if (W >= 480) bijwerken(dt);
+  tekenen();
+  requestAnimationFrame(lus);
+}
+requestAnimationFrame(lus);
+</script>
+</body>
+</html>
