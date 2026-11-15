@@ -17,7 +17,7 @@
 <canvas id="spel"></canvas>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 5
+//  KAAS ROYALE - versie 6
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -397,12 +397,19 @@ function voetBijwerken(dt) {
       else { voet.fase = 'aanloop'; voet.t = 0; }
     }
   } else if (voet.fase === 'aanloop') {
-    voet.x = rust - 50 * Math.min(1, voet.t / 0.55);
-    if (voet.t >= 0.6) { voet.fase = 'trap'; voet.t = 0; piep(200, 0.2, 'sawtooth', 0.06, 90); }
+    voet.x = rust - 50 * Math.min(1, voet.t / 0.45);
+    if (voet.t >= 0.5) { voet.fase = 'trap'; voet.t = 0; piep(200, 0.2, 'sawtooth', 0.06, 90); }
   } else if (voet.fase === 'trap') {
+    // snel uithalen en meteen weer terug, zodat je ook kunt ontwijken als je meteen springt
     const doel = rat.x + 50 - VOET_B;
-    voet.x = rust - 50 + (doel - rust + 50) * Math.min(1, voet.t / 0.22);
-    if (voet.t >= 0.3) { voet.fase = 'terug'; voet.t = 0; }
+    voet.x = rust - 50 + (doel - rust + 50) * Math.min(1, voet.t / 0.15);
+    if (voet.t >= 0.18) {
+      voet.fase = 'terug'; voet.t = 0;
+      if (toestand === 'spelen') {
+        score += 5;
+        deeltjes.push({ x: rat.x + 10, y: rat.y - 70, vy: -60, leven: 0.8, tekst: 'Ontweken! +5', goud: true });
+      }
+    }
   } else if (voet.fase === 'terug') {
     voet.x += (rust - voet.x) * Math.min(1, 8 * dt);
     if (voet.t >= 0.45) { voet.fase = 'loopt'; voet.t = 0; voet.volgende = willekeurig(1.3, 2.1); }
