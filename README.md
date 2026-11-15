@@ -13,7 +13,7 @@ Een ratje rent door een schatkamer vol lekkers. Gemaakt voor de telefoon (houd h
 
 ## In het spel
 
-- Lekkers pakken voor punten, gouden kaas is 5 punten
+- Lekkers pakken: elk snoepje is 2 punten, gouden kaas is 10 punten
 - 🍭 Superlolly: 5 seconden superkracht (sneller, dwars door alles, dubbele punten)
 - Muizenvallen en schatkisten: springen
 - Kroonluchters: bukken
@@ -21,7 +21,9 @@ Een ratje rent door een schatkamer vol lekkers. Gemaakt voor de telefoon (houd h
 - Kleine gaten: springen; grote gaten: via de trampoline
 - Opstapjes in de vloer: springen
 - De grote voet: komt elke 14 seconden, spring als je een rode ! ziet
-- Nieuwe ratjes vrijspelen bij 50, 150 en 300 punten
+- Nieuwe ratjes vrijspelen bij 50, 150, 300 en 500 punten (Radio, de radioactieve rat)
+- Level 1 is de schatkamer. Na 600 meter kom je bij de put: daar val je in level 2, het riool
+  (met poep, wc-papier, rioolbuizen en groen rioolwater in de gaten)
 
 ## Zelf aanpassen
 

@@ -17,7 +17,7 @@
 <canvas id="spel"></canvas>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 4
+//  KAAS ROYALE - versie 5
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -33,7 +33,9 @@ const INSTELLINGEN = {
   zwaartekracht: 1800,     // hoe hard je weer naar beneden valt
   bukTijd: 0.8,            // hoeveel seconden je bukt na omlaag vegen
   kansOpGoud: 0.08,        // kans op gouden kaas (0 = nooit, 1 = altijd)
-  puntenGoud: 5,           // punten voor gouden kaas
+  puntenLekker: 2,         // punten voor elk snoepje
+  puntenGoud: 10,          // punten voor gouden kaas
+  levelLengte: 600,        // na hoeveel meter je bij de put komt (einde van level 1)
   snoepjeElke: 18,         // om de hoeveel seconden er ongeveer een superlolly komt
   boostDuur: 5,            // hoeveel seconden de superkracht duurt
   boostSnelheid: 1.5,      // hoeveel keer zo snel je gaat met superkracht
@@ -53,6 +55,7 @@ const RATJES = [
   { naam: 'Pepper', nodig: 50,  vacht: '#7a4a2a', buik: '#c99f78', roze: '#f2a7b5' },
   { naam: 'Ninja',  nodig: 150, vacht: '#2b2b33', buik: '#55556a', roze: '#f2a7b5', band: '#e02424' },
   { naam: 'Goudje', nodig: 300, vacht: '#d9a520', buik: '#f6dd8a', roze: '#f7b3c0', kroon: true },
+  { naam: 'Radio',  nodig: 500, vacht: '#4cff3a', buik: '#b8ff9e', roze: '#c8ff7a', straling: true },
 ];
 
 // ----- Het lekkers in de schatkamer -----
@@ -82,7 +85,8 @@ window.addEventListener('resize', maatAanpassen);
 maatAanpassen();
 
 // ----- Toestand van het spel -----
-let toestand = 'menu';   // 'menu', 'spelen' of 'af'
+let toestand = 'menu';   // 'menu', 'spelen', 'overgang' (naar het volgende level) of 'af'
+let level = 1, levelStart = 0, put = null, overgangT = 0, levelGewisseld = false;
 let rat, dingen = [], lekkers = [], deeltjes = [], gaten = [];
 let snelheid, afstand, score, volgendObstakel, volgendLekker, volgendSnoepje, springBuffer, luchtersGezien;
 let gatenGezien, tijdSindsGat, stammenGezien, voetenGezien;
@@ -106,6 +110,7 @@ function nieuwSpel() {
   vloerAanvullen();
   voet = { actief: false };
   voetTimer = INSTELLINGEN.voetElke;
+  level = 1; levelStart = 0; put = null;
   volgendObstakel = 1.4; volgendLekker = 0.4;
   volgendSnoepje = willekeurig(8, 12);   // de eerste komt wat sneller
   nieuwRecord = false; vrijgespeeld = [];
@@ -182,6 +187,7 @@ function tikBuitenSpel(x) {
     }
   } else if (toestand === 'af' && afSinds > 0.7) {
     toestand = 'menu';
+    level = 1;
   }
 }
 
@@ -225,6 +231,7 @@ function vloerHoogte(x) {
   return 0;
 }
 function vloerY(x) { return G - vloerHoogte(x); }
+function levelAfstand() { return level === 1 ? afstand : afstand - levelStart + 2500; }
 function grondY(x) { return boveGat(x) ? Infinity : vloerY(x); }
 
 // Maakt steeds nieuwe stukken vloer, ver buiten beeld
@@ -233,7 +240,7 @@ function vloerAanvullen() {
   let laatste = vloer[vloer.length - 1];
   while (laatste.x + laatste.w < W + 1600) {
     let h = 0;
-    if (afstand + laatste.x > 2000 && Math.random() < 0.75) {
+    if (levelAfstand() + laatste.x > 2000 && Math.random() < 0.75) {
       h = kies([0, stap, stap * 2].filter(k => k <= laatste.h + stap)); // nooit meer dan 1 opstapje omhoog
     }
     laatste = { x: laatste.x + laatste.w, w: willekeurig(450, 1000), h };
@@ -323,6 +330,32 @@ function maakGat() {
 function boveGat(x) {
   if (rat && rat.boost > 0) return false; // met superkracht ren je over een regenboog
   return gaten.some(g => x > g.x + 4 && x < g.x + g.w - 4);
+}
+
+// ----- Einde van level 1: de put naar het riool -----
+function maakPut() {
+  // pas na alles wat er al aankomt
+  let x = W + 400;
+  dingen.forEach(o => { x = Math.max(x, o.x + o.w + 350); });
+  gaten.forEach(g => { x = Math.max(x, g.x + g.w + 350); });
+  const vanaf = Math.max(W + 5, x - 250);
+  put = { x, v: maakVlak(vanaf, x + 700) };
+  volgendObstakel = 999;
+  voetTimer = 999;
+  if (voet.actief) voet.fase = 'gaat';
+}
+function startLevel2() {
+  level = 2;
+  levelStart = afstand;
+  put = null;
+  dingen = []; lekkers = []; gaten = []; deeltjes = [];
+  vloer = [{ x: -200, w: W + 900, h: 0 }];
+  vloerAanvullen();
+  rat.x = RAT_X; rat.y = G; rat.vy = 0; rat.opGrond = true; rat.vliegt = false; rat.dubbel = false; rat.bukken = 0;
+  snelheid = Math.max(INSTELLINGEN.startSnelheid + 40, snelheid * 0.85);
+  volgendObstakel = 1.6; volgendLekker = 0.3; tijdSindsGat = 0;
+  voet = { actief: false };
+  voetTimer = INSTELLINGEN.voetElke;
 }
 
 // ----- De grote voet -----
@@ -423,6 +456,13 @@ function bijwerken(dt) {
   deeltjes = deeltjes.filter(d => d.leven > 0);
 
   if (toestand === 'menu') { scrollX += 40 * dt; return; }
+  if (toestand === 'overgang') {
+    overgangT += dt;
+    if (overgangT < 1) { rat.x += (put.x + 20 - rat.x) * Math.min(1, 8 * dt); rat.y += 260 * dt; }
+    if (overgangT >= 1 && !levelGewisseld) { levelGewisseld = true; startLevel2(); }
+    if (overgangT >= 2.4) toestand = 'spelen';
+    return;
+  }
   if (toestand === 'af') { afSinds += dt; return; }
 
   snelheid = Math.min(INSTELLINGEN.maxSnelheid, snelheid + INSTELLINGEN.versnelling * dt);
@@ -484,13 +524,14 @@ function bijwerken(dt) {
 
   // Nieuwe dingen maken
   tijdSindsGat += dt;
+  if (level === 1 && !put && afstand > INSTELLINGEN.levelLengte * 40 - W) maakPut();
   volgendObstakel -= dt;
   if (volgendObstakel <= 0) {
     volgendObstakel = willekeurig(0.95, 1.8);
-    const r = Math.random(), I = INSTELLINGEN;
-    if (afstand > 2500 && tijdSindsGat > 9 && r < I.gatKans) maakGat();
-    else if (afstand > 1200 && r < I.gatKans + I.kleinGatKans) maakKleinGat();
-    else if (afstand > 1800 && r < I.gatKans + I.kleinGatKans + I.boomstamKans) maakObstakel('stam');
+    const r = Math.random(), I = INSTELLINGEN, la = levelAfstand();
+    if (la > 2500 && tijdSindsGat > 9 && r < I.gatKans) maakGat();
+    else if (la > 1200 && r < I.gatKans + I.kleinGatKans) maakKleinGat();
+    else if (la > 1800 && r < I.gatKans + I.kleinGatKans + I.boomstamKans) maakObstakel('stam');
     else maakObstakel();
   }
   const bezet = x => dingen.some(o => x > o.x - 60 && x < o.x + o.w + 60)
@@ -514,6 +555,14 @@ function bijwerken(dt) {
   vloer = vloer.filter(s => s.x + s.w > -300);
   vloerAanvullen();
   gaten.forEach(g => { g.x -= dx; if (g.trampX !== null) g.trampX -= dx; });
+  if (put) {
+    put.x -= dx;
+    if (rat.x >= put.x + 25) {   // in de put: op naar level 2!
+      toestand = 'overgang'; overgangT = 0; levelGewisseld = false;
+      [400, 300, 200, 120].forEach((t, i) => piep(t, 0.25, 'triangle', 0.08, 0, i * 0.15));
+      return;
+    }
+  }
   gaten = gaten.filter(g => g.x + g.w > -80);
 
   // De grote voet
@@ -560,7 +609,7 @@ function pakLekker(l) {
     for (let i = 0; i < 16; i++) deeltjes.push({ x: l.x, y: l.y, vx: willekeurig(-200, 200), vy: willekeurig(-200, 100), leven: 0.7, regenboog: true });
     return;
   }
-  const punten = (l.goud ? INSTELLINGEN.puntenGoud : 1) * (rat.boost > 0 ? 2 : 1);
+  const punten = (l.goud ? INSTELLINGEN.puntenGoud : INSTELLINGEN.puntenLekker) * (rat.boost > 0 ? 2 : 1);
   score += punten;
   deeltjes.push({ x: l.x, y: l.y, vy: -70, leven: 0.8, tekst: '+' + punten, goud: l.goud });
   if (l.goud) {
@@ -586,7 +635,13 @@ function af(soort) {
   toestand = 'af';
   afSinds = 0;
   schudden = 0.35;
-  oorzaak = {
+  oorzaak = (level === 2 ? {
+    val: 'Bah! In de poep gestapt.',
+    kist: 'Oeps! Tegen het wc-papier.',
+    luchter: 'Au! Tegen de rioolbuis.',
+    stam: 'Boink! Tegen de grote buis.',
+    gat: 'Plons! In het rioolwater.',
+  }[soort] : null) || {
     val: 'Klap! In de muizenval.',
     kist: 'Bonk! Tegen een schatkist.',
     luchter: 'Au! Tegen de kroonluchter.',
@@ -608,6 +663,11 @@ function af(soort) {
 //  Tekenen
 // =====================================================================
 function tekenAchtergrond() {
+  if (level === 2) tekenRiool(); else tekenSchatkamer();
+  tekenVloer();
+}
+
+function tekenSchatkamer() {
   const lucht = ctx.createLinearGradient(0, 0, 0, G);
   lucht.addColorStop(0, '#1f0f04');
   lucht.addColorStop(1, '#4a2a0e');
@@ -664,19 +724,24 @@ function tekenAchtergrond() {
     ctx.fillRect(x - 2, G - h - 7, 3, 3);
   }
 
+}
+
+function tekenVloer() {
   // Vloer, in stukken met verschillende hoogtes
+  const riool = level === 2;
+  const kleurVloer = riool ? '#3d4540' : '#3b2410', kleurRand = riool ? '#7fd13b' : '#d4a017', kleurNaad = riool ? '#2a302c' : '#2c1a0b';
   const stukken = toestand === 'menu' ? [{ x: -10, w: W + 20, h: 0 }] : vloer;
   const t = scrollX % 64;
   for (const st of stukken) {
     if (st.x > W || st.x + st.w < 0) continue;
     const y = G - st.h;
-    ctx.fillStyle = '#3b2410';
+    ctx.fillStyle = kleurVloer;
     ctx.fillRect(st.x, y, st.w + 1, H - y);
-    ctx.fillStyle = '#d4a017';
+    ctx.fillStyle = kleurRand;
     ctx.fillRect(st.x, y, st.w + 1, 3);
     ctx.save();
     ctx.beginPath(); ctx.rect(st.x, y, st.w, H - y); ctx.clip();
-    ctx.strokeStyle = '#2c1a0b'; ctx.lineWidth = 2;
+    ctx.strokeStyle = kleurNaad; ctx.lineWidth = 2;
     for (let x = -t - 64; x < W + 64; x += 64) {
       ctx.beginPath(); ctx.moveTo(x, y + 3); ctx.lineTo(x, y + 32); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(x + 32, y + 32); ctx.lineTo(x + 32, H); ctx.stroke();
@@ -688,9 +753,65 @@ function tekenAchtergrond() {
   for (let i = 1; i < stukken.length; i++) {
     const a = stukken[i - 1], b = stukken[i];
     if (a.h === b.h || b.x < -10 || b.x > W + 10) continue;
-    ctx.fillStyle = '#d4a017';
+    ctx.fillStyle = kleurRand;
     ctx.fillRect(b.x - 2, G - Math.max(a.h, b.h), 3, Math.abs(a.h - b.h) + 3);
   }
+}
+
+function tekenRiool() {
+  const lucht = ctx.createLinearGradient(0, 0, 0, G);
+  lucht.addColorStop(0, '#0d1410');
+  lucht.addColorStop(1, '#1f2b22');
+  ctx.fillStyle = lucht;
+  ctx.fillRect(0, 0, W, G);
+
+  // bakstenen muur (beweegt langzaam)
+  const p = scrollX * 0.3;
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2;
+  for (let rij = 0; rij * 22 < G; rij++) {
+    const y = rij * 22, schuif = (rij % 2) * 24;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    for (let x = -((p + schuif) % 48); x < W; x += 48) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 22); ctx.stroke(); }
+  }
+  // tunnelbogen en lampjes
+  const q = scrollX * 0.45, tussen = 300;
+  for (let i = Math.floor(q / tussen) - 1; i * tussen - q < W + tussen; i++) {
+    const x = i * tussen - q;
+    ctx.strokeStyle = '#2c3a30'; ctx.lineWidth = 16;
+    ctx.beginPath(); ctx.arc(x + 150, G + 40, 190, Math.PI, 0); ctx.stroke();
+    const lamp = ctx.createRadialGradient(x + 150, 60, 2, x + 150, 60, 90);
+    lamp.addColorStop(0, 'rgba(190,255,150,0.30)');
+    lamp.addColorStop(1, 'rgba(190,255,150,0)');
+    ctx.fillStyle = lamp; ctx.fillRect(x + 60, 0, 180, 160);
+    ctx.fillStyle = '#d8ffb0'; ctx.beginPath(); ctx.arc(x + 150, 60, 5, 0, Math.PI * 2); ctx.fill();
+  }
+  // buizen met druppels (dichterbij)
+  const r = scrollX * 0.6, tussen2 = 420;
+  for (let i = Math.floor(r / tussen2) - 1; i * tussen2 - r < W + tussen2; i++) {
+    const x = i * tussen2 - r + hash(i) * 100, y = 150 + hash(i + 7) * 80;
+    ctx.fillStyle = '#56645a'; ctx.fillRect(x, y, 160, 18);
+    ctx.fillStyle = '#6d7d72'; ctx.fillRect(x, y, 160, 5);
+    ctx.fillStyle = '#48554c'; ctx.fillRect(x - 6, y - 3, 10, 24); ctx.fillRect(x + 156, y - 3, 10, 24);
+    const val = (tijd * 120 + hash(i) * 200) % (G - y);
+    ctx.fillStyle = '#7fd13b';
+    ctx.beginPath(); ctx.ellipse(x + 80, y + 18 + val, 3, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(127,209,59,0.5)';
+    ctx.beginPath(); ctx.ellipse(x + 80, y + 22, 8, 4, 0, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+function tekenStralingsteken(x, y, r) {
+  ctx.fillStyle = '#ffd400';
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#111';
+  for (let i = 0; i < 3; i++) {
+    const a = -Math.PI / 2 + i * Math.PI * 2 / 3;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.85, a - Math.PI / 6, a + Math.PI / 6);
+    ctx.arc(x, y, r * 0.3, a + Math.PI / 6, a - Math.PI / 6, true);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.beginPath(); ctx.arc(x, y, r * 0.18, 0, Math.PI * 2); ctx.fill();
 }
 
 function tekenRat(x, y, k, bukt, fase, grootte = 1) {
@@ -718,11 +839,14 @@ function tekenRat(x, y, k, bukt, fase, grootte = 1) {
     ctx.beginPath(); ctx.ellipse(px + d, -2, 6, 3, 0, 0, Math.PI * 2); ctx.fill();
   });
 
-  // lijf
+  // lijf (de radioactieve rat gloeit)
+  if (k.straling) { ctx.shadowColor = '#6dff4a'; ctx.shadowBlur = 14 + Math.sin(tijd * 6) * 6; }
   ctx.fillStyle = k.vacht;
   ctx.beginPath(); ctx.ellipse(0, -18 * plat + wieg, 26, 16 * plat, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
   ctx.fillStyle = k.buik;
   ctx.beginPath(); ctx.ellipse(5, -11 * plat + wieg, 16, 7 * plat, 0, 0, Math.PI * 2); ctx.fill();
+  if (k.straling) tekenStralingsteken(-4, -20 * plat + wieg, bukt ? 6 : 9);
 
   // kop
   const ky = (bukt ? -10 : -24) + wieg;
@@ -773,6 +897,8 @@ function tekenRat(x, y, k, bukt, fase, grootte = 1) {
 
 function tekenSpeler() {
   const k = RATJES[gekozen];
+  if (toestand === 'overgang' && overgangT > 0.35 && overgangT < 1) return;   // in de put verdwenen
+  if (k.straling && Math.random() < 0.3) deeltjes.push({ x: rat.x + willekeurig(-20, 30), y: rat.y - willekeurig(5, 30), vx: 0, vy: -40, leven: 0.5, straling: true });
   if (rat.boost > 0) {
     // regenboog-gloed rond het ratje
     const kleur = 'hsla(' + Math.floor(tijd * 360) % 360 + ',100%,60%,';
@@ -787,7 +913,71 @@ function tekenSpeler() {
   tekenRat(rat.x, rat.y, k, ratBukt(), rat.fase);
 }
 
+function tekenRioolObstakel(o) {
+  const v = o.v;
+  if (o.soort === 'val') {
+    // een drol
+    ctx.font = '34px ' + EMOJI; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText('💩', o.x + o.w / 2, v + 5);
+    ctx.strokeStyle = 'rgba(160,220,90,0.7)'; ctx.lineWidth = 2;   // stinklijntjes
+    for (let i = -1; i <= 1; i++) {
+      const sx = o.x + o.w / 2 + i * 10, sy = v - 34 + Math.sin(tijd * 5 + i) * 3;
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.quadraticCurveTo(sx + 5, sy - 6, sx, sy - 12); ctx.stroke();
+    }
+  } else if (o.soort === 'kist') {
+    // twee rollen wc-papier op elkaar
+    for (let i = 0; i < 2; i++) {
+      const y = v - 20 - i * 20;
+      ctx.fillStyle = '#f4f4f0'; ctx.fillRect(o.x + 4, y, o.w - 8, 20);
+      ctx.fillStyle = '#d9d9d2'; ctx.fillRect(o.x + 4, y + 16, o.w - 8, 4);
+      ctx.fillStyle = '#e8e8e2';
+      ctx.beginPath(); ctx.ellipse(o.x + o.w - 4, y + 10, 5, 10, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#b89a6a';
+      ctx.beginPath(); ctx.ellipse(o.x + o.w - 4, y + 10, 2, 4, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#f4f4f0';   // los velletje
+    ctx.fillRect(o.x + 6, v - 4, 14, 4);
+  } else if (o.soort === 'stam') {
+    // het uiteinde van een dikke rioolbuis
+    const cx = o.x + o.r, cy = v - o.r;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(cx, v + 2, o.r, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#6b766f';
+    ctx.beginPath(); ctx.arc(cx, cy, o.r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#4d5751';
+    ctx.beginPath(); ctx.arc(cx, cy, o.r - 7, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0c120e';
+    ctx.beginPath(); ctx.arc(cx, cy, o.r - 15, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#7fd13b';   // groen slijm
+    ctx.beginPath(); ctx.ellipse(cx, cy + o.r - 16, 22, 6, 0, 0, Math.PI); ctx.fill();
+    ctx.fillRect(cx + 10, cy + o.r - 14, 5, 10 + Math.sin(tijd * 3) * 3);
+    if (o.nummer <= 3) {
+      ctx.globalAlpha = 0.6 + Math.sin(tijd * 10) * 0.4;
+      tekst('2x springen! ⬆⬆', cx, cy - o.r - 22, 18, '#7dff9a');
+      ctx.globalAlpha = 1;
+    }
+  } else {
+    // een buis die uit het plafond komt, met een druppel
+    const cx = o.x + o.w / 2, onder = v - 30;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(cx, v + 2, o.w / 2, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5f6b63'; ctx.fillRect(cx - 18, 0, 36, onder);
+    ctx.fillStyle = '#76837a'; ctx.fillRect(cx - 18, 0, 8, onder);
+    ctx.fillStyle = '#4b5650'; ctx.fillRect(cx - 24, onder - 14, 48, 14);
+    ctx.fillRect(cx - 24, 60, 48, 10);
+    const drup = (tijd * 90) % 40;
+    ctx.fillStyle = '#7fd13b';
+    ctx.beginPath(); ctx.ellipse(cx, onder + 4 + drup * 0.3, 4, 6, 0, 0, Math.PI * 2); ctx.fill();
+    if (o.nummer <= 3) {
+      ctx.globalAlpha = 0.6 + Math.sin(tijd * 10) * 0.4;
+      tekst('⬇ bukken!', cx, v + 22, 18, '#7dff9a');
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
 function tekenObstakel(o) {
+  if (level === 2) return tekenRioolObstakel(o);
   if (o.soort === 'val') {
     const x = o.x, y = o.v;
     ctx.fillStyle = '#a0612b';
@@ -879,18 +1069,54 @@ function tekenObstakel(o) {
   }
 }
 
+function tekenPut() {
+  if (!put) return;
+  const cx = put.x + 35, v = put.v;
+  ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.ellipse(cx, v + 2, 38, 9, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#8a8f93'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.ellipse(cx, v + 2, 38, 9, 0, 0, Math.PI * 2); ctx.stroke();
+  // het deksel staat ernaast
+  ctx.fillStyle = '#6e7377';
+  ctx.beginPath(); ctx.ellipse(put.x + 100, v - 26, 9, 28, 0.15, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#4d5155'; ctx.lineWidth = 2;
+  for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(put.x + 95, v - 26 + i * 9); ctx.lineTo(put.x + 105, v - 24 + i * 9); ctx.stroke(); }
+  // groene gloed uit de put
+  const gloed = ctx.createRadialGradient(cx, v, 2, cx, v, 60);
+  gloed.addColorStop(0, 'rgba(120,255,80,0.45)');
+  gloed.addColorStop(1, 'rgba(120,255,80,0)');
+  ctx.fillStyle = gloed; ctx.fillRect(cx - 60, v - 60, 120, 70);
+  ctx.globalAlpha = 0.6 + Math.sin(tijd * 8) * 0.4;
+  tekst('⬇ DE PUT ⬇', cx, v - 75, 22, '#7dff9a');
+  ctx.globalAlpha = 1;
+}
+
 function tekenGat(g) {
   // het gat zelf: diep en donker
   const v = g.v;
+  const riool = level === 2;
   const diepte = ctx.createLinearGradient(0, v, 0, H);
-  diepte.addColorStop(0, '#120802');
+  diepte.addColorStop(0, riool ? '#0e1a10' : '#120802');
   diepte.addColorStop(1, '#000');
   ctx.fillStyle = diepte;
   ctx.fillRect(g.x, v, g.w, H - v);
-  ctx.fillStyle = '#5a3816';
+  if (riool) {
+    // groen rioolwater met golfjes en belletjes
+    const wy = v + 26;
+    ctx.fillStyle = '#4fa82a';
+    ctx.beginPath(); ctx.moveTo(g.x, H);
+    for (let x = g.x; x <= g.x + g.w; x += 8) ctx.lineTo(x, wy + Math.sin(x * 0.08 + tijd * 4) * 3);
+    ctx.lineTo(g.x + g.w, H); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(200,255,150,0.6)';
+    for (let i = 0; i < g.w / 40; i++) {
+      const bx = g.x + 15 + i * 40 + Math.sin(i * 7) * 8, by = wy + 8 + ((tijd * 25 + i * 13) % 30);
+      ctx.beginPath(); ctx.arc(bx, H - (by - wy), 2.5, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.fillStyle = riool ? '#2a302c' : '#5a3816';
   ctx.fillRect(g.x - 4, v, 4, H - v);
   ctx.fillRect(g.x + g.w, v, 4, H - v);
-  ctx.fillStyle = '#d4a017';
+  ctx.fillStyle = riool ? '#7fd13b' : '#d4a017';
   ctx.fillRect(g.x - 6, v, 6, 3);
   ctx.fillRect(g.x + g.w, v, 6, 3);
 
@@ -985,7 +1211,10 @@ function tekenLekker(l) {
 function tekenDeeltjes() {
   deeltjes.forEach(d => {
     ctx.globalAlpha = Math.min(1, d.leven * 2);
-    if (d.ster) {
+    if (d.straling) {
+      ctx.fillStyle = '#8dff5a';
+      ctx.beginPath(); ctx.arc(d.x, d.y, 2.5, 0, Math.PI * 2); ctx.fill();
+    } else if (d.ster) {
       ctx.fillStyle = '#ffe680';
       ctx.fillRect(d.x - 2, d.y - 2, 4, 4);
     } else if (d.regenboog) {
@@ -1015,11 +1244,13 @@ function tekst(t, x, y, grootte, kleur = '#fff', uitlijnen = 'center', dik = tru
 function tekenScore() {
   tekst('🧀 ' + score, 18, 30, 26, '#ffe14d', 'left');
   tekst(Math.floor(afstand / 40) + ' m', W / 2, 30, 20, '#fff');
+  tekst(level === 2 ? 'Level 2: het riool' : 'Level 1: de schatkamer', W / 2, 52, 13, level === 2 ? '#9dff6a' : '#ffd27a', 'center', false);
+  if (put) tekst('Nog ' + Math.max(0, Math.ceil((put.x - rat.x) / 40)) + ' m tot de put', W - 18, 54, 16, '#9dff6a', 'right');
   tekst('Record ' + record, W - 18, 30, 18, '#ffd27a', 'right', false);
   if (voet.actief && voet.tijd > 0) tekst('🦶 ' + Math.ceil(voet.tijd), 18, 62, 20, '#ff9a7a', 'left');
   if (rat.boost > 0) {
     // balk die laat zien hoe lang de superkracht nog duurt
-    const bw = 200, bx = W / 2 - bw / 2, by = 56;
+    const bw = 200, bx = W / 2 - bw / 2, by = 66;
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.fillRect(bx, by, bw, 12);
     ctx.fillStyle = 'hsl(' + Math.floor(tijd * 360) % 360 + ',100%,60%)';
@@ -1090,6 +1321,7 @@ function tekenen() {
 
   if (toestand !== 'menu') {
     gaten.forEach(tekenGat);
+    tekenPut();
     lekkers.forEach(tekenLekker);
     dingen.forEach(tekenObstakel);
     tekenVoet();
@@ -1101,6 +1333,17 @@ function tekenen() {
 
   if (toestand === 'menu') tekenMenu();
   if (toestand === 'af') tekenAf();
+  if (toestand === 'overgang') {
+    // het scherm wordt zwart en weer licht, met in het midden het nieuwe level
+    const t = overgangT;
+    ctx.globalAlpha = t < 1 ? t : Math.max(0, 1 - (t - 1.4) / 1);
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+    if (t > 0.6 && t < 2.3) {
+      tekst('LEVEL 2', W / 2, H / 2 - 30, 54, '#7dff9a');
+      tekst('Het riool 🐀', W / 2, H / 2 + 25, 26, '#fff');
+    }
+  }
   if (W < 480) tekenDraaiTelefoon();
 }
 
