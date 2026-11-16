@@ -30,7 +30,11 @@ Een ratje rent door een schatkamer vol lekkers. Gemaakt voor de telefoon (houd h
 - In level 2 beginnen de punten opnieuw, met een eigen record. Bij 150 punten in level 2 speel je de Poeprat vrij (bruin, met een drolletje op zijn hoofd), bij 300 de WC-rat
   (ingepakt in wc-papier) en bij 450 de Slijmrat (groen en druipend)
 - Bij 500 punten in level 2 komt de pijp: daar schiet je omhoog naar level 3, de keuken (messen, peper en zout, koekenpannen,
-  een soeppan, gasfornuizen, een spons als trampoline en de kat). Bij 150 punten in level 3 speel je Chef vrij, met een koksmuts
+  een soeppan, gasfornuizen, een spons als trampoline en de kat). In level 3 speel je Chef vrij bij 150 punten (koksmuts),
+  Hotdog bij 400 en Aangebrand bij 600 (zwart, met rook)
+- Bij 800 punten in level 3 komt het muizenhol: daar ren je in naar level 4, de kapsalon (haar, tondeuses, stekkers, föhns,
+  een krulspeld, wasbakken met shampoo, handdoeken als trampoline en de reuzenschaar). Je krijgt meteen Krul (met krullen);
+  bij 200 punten Rapunzel (lang haar) en bij 400 Low Taper (blauwe low taper fade)
 
 ## Zelf aanpassen
 
