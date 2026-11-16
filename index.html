@@ -21,7 +21,7 @@
 <canvas id="spel"></canvas>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 16
+//  KAAS ROYALE - versie 17
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -110,7 +110,7 @@ let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
 const ratLevel = k => k.level || 1;
 const recordVan = n => n === 3 ? record3 : n === 2 ? record2 : record;
 const ratOpen = k => recordVan(ratLevel(k)) >= k.nodig;
-const VERSIE = 16;
+const VERSIE = 17;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
 let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= INSTELLINGEN.levelPunten;
 let level3Open = localStorage.getItem('kaasRoyaleLevel3') === '1' || record2 >= INSTELLINGEN.levelPunten;
@@ -231,7 +231,7 @@ async function vraagGeheimeCode() {
 }
 function tikBuitenSpel(x, y = H) {
   startAudio();
-  if (toestand === 'menu' && y < 75) {
+  if (toestand === 'menu' && y < 118) {   // de titel en de zin eronder
     const nu = performance.now();
     titelTikken = titelTikken.filter(t => nu - t < 2500).concat(nu);
     if (titelTikken.length >= 5) { titelTikken = []; vraagGeheimeCode(); }
