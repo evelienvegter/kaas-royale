@@ -21,7 +21,7 @@
 <canvas id="spel"></canvas>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 12
+//  KAAS ROYALE - versie 13
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -100,7 +100,7 @@ let scrollX = 0, tijd = 0, afSinds = 0, schudden = 0, oorzaak = '', nieuwRecord 
 let melding = '', meldingTijd = 0;
 let record = Number(localStorage.getItem('kaasRoyaleRecord')) || 0;
 let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
-const VERSIE = 12;
+const VERSIE = 13;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
 let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= INSTELLINGEN.levelPunten;
 let startLevel = level2Open && localStorage.getItem('kaasRoyaleStartLevel') === '2' ? 2 : 1;
@@ -520,7 +520,8 @@ function bijwerken(dt) {
   }
   if (toestand === 'af') { afSinds += dt; return; }
 
-  snelheid = Math.min(INSTELLINGEN.maxSnelheid, snelheid + INSTELLINGEN.versnelling * dt);
+  // tijdens de superkracht wordt het spel niet sneller, zodat je daarna weer je gewone snelheid hebt
+  if (rat.boost <= 0) snelheid = Math.min(INSTELLINGEN.maxSnelheid, snelheid + INSTELLINGEN.versnelling * dt);
   const dx = snelheid * (rat.boost > 0 ? INSTELLINGEN.boostSnelheid : 1) * dt;
   afstand += dx;
   scrollX += dx;
