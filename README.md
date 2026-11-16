@@ -26,7 +26,8 @@ Een ratje rent door een schatkamer vol lekkers. Gemaakt voor de telefoon (houd h
 - Nieuwe ratjes vrijspelen bij 50, 150, 300 en 500 punten (Radio, de radioactieve rat)
 - Level 1 is de schatkamer. Bij 500 punten komt de put: daar val je in level 2, het riool
   (met poep, wc-papier, rioolbuizen en groen rioolwater in de gaten)
-- Heb je level 2 een keer gehaald, dan kies je in het menu zelf of je in level 1 of level 2 begint
+- Heb je level 2 een keer gehaald, dan krijgt het beginscherm een tweede slide: veeg opzij en tik op je ratje om meteen in level 2 te beginnen
+- In level 2 beginnen de punten opnieuw, met een eigen record. Bij 150 punten in level 2 speel je de Poeprat vrij (bruin, met een drolletje op zijn hoofd)
 
 ## Zelf aanpassen
 

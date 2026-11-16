@@ -21,7 +21,7 @@
 <canvas id="spel"></canvas>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 13
+//  KAAS ROYALE - versie 14
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -54,13 +54,15 @@ const INSTELLINGEN = {
   aftellen: 2,             // hoeveel seconden het spel aftelt voordat de voet trapt
 };
 
-// ----- De ratjes: bij genoeg punten (je record) speel je een nieuw ratje vrij -----
+// ----- De ratjes: bij genoeg punten (je record in dat level) speel je een nieuw ratje vrij -----
 const RATJES = [
   { naam: 'Snuf',   nodig: 0,   vacht: '#9b9b9b', buik: '#dcdcdc', roze: '#f2a7b5' },
   { naam: 'Pepper', nodig: 50,  vacht: '#7a4a2a', buik: '#c99f78', roze: '#f2a7b5' },
   { naam: 'Ninja',  nodig: 150, vacht: '#2b2b33', buik: '#55556a', roze: '#f2a7b5', band: '#e02424' },
   { naam: 'Goudje', nodig: 300, vacht: '#d9a520', buik: '#f6dd8a', roze: '#f7b3c0', kroon: true },
   { naam: 'Radio',  nodig: 500, vacht: '#4cff3a', buik: '#b8ff9e', roze: '#c8ff7a', straling: true },
+  // ratjes voor level 2 (punten in het riool)
+  { naam: 'Poeprat', nodig: 150, level: 2, vacht: '#6b4423', buik: '#a8794c', roze: '#e8a0a8', poep: true },
 ];
 
 // ----- Het lekkers in de schatkamer -----
@@ -98,14 +100,19 @@ let gatenGezien, tijdSindsGat, stammenGezien, voetenGezien;
 let vloer = [], voet = { actief: false }, voetTimer = 0;
 let scrollX = 0, tijd = 0, afSinds = 0, schudden = 0, oorzaak = '', nieuwRecord = false, vrijgespeeld = [];
 let melding = '', meldingTijd = 0;
-let record = Number(localStorage.getItem('kaasRoyaleRecord')) || 0;
+let record = Number(localStorage.getItem('kaasRoyaleRecord')) || 0;      // record in level 1
+let record2 = Number(localStorage.getItem('kaasRoyaleRecord2')) || 0;    // record in level 2
 let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
-const VERSIE = 13;
+const ratLevel = k => k.level || 1;
+const recordVan = n => n === 2 ? record2 : record;
+const ratOpen = k => recordVan(ratLevel(k)) >= k.nodig;
+const VERSIE = 14;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
 let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= INSTELLINGEN.levelPunten;
-let startLevel = level2Open && localStorage.getItem('kaasRoyaleStartLevel') === '2' ? 2 : 1;
-level = startLevel;   // het menu laat de achtergrond van het gekozen level zien
-if (!RATJES[gekozen] || RATJES[gekozen].nodig > record) gekozen = 0;
+// het beginscherm heeft een slide per level; level 2 komt erbij als je hem gehaald hebt
+let slide = level2Open && localStorage.getItem('kaasRoyaleStartLevel') === '2' ? 2 : 1;
+level = slide;   // het menu laat de achtergrond van dat level zien
+if (!RATJES[gekozen] || !ratOpen(RATJES[gekozen])) gekozen = 0;
 let omlaagIngedrukt = false, vingerOmlaag = false;
 
 const RAT_X = 140;        // waar het ratje rent
@@ -179,13 +186,17 @@ function bukken() {
 }
 
 // Welk vakje in het menu hoort bij deze plek?
+// Welke ratjes staan op deze slide? Op slide 1 de ratjes van level 1, op slide 2 allemaal
+function slideRatjes(n = slide) { return RATJES.filter(k => n === 2 || ratLevel(k) === 1); }
 function menuVakje(x) {
-  return Math.max(0, Math.min(RATJES.length - 1, Math.floor(x / (W / RATJES.length))));
+  const lijst = slideRatjes();
+  return Math.max(0, Math.min(lijst.length - 1, Math.floor(x / (W / lijst.length))));
 }
-// De knoppen in het menu om een level te kiezen
-const KNOP_Y = 162, KNOP_H = 36;
-function kiesLevel(n) {
-  startLevel = n;
+// Naar de andere slide van het beginscherm
+const PIJL_Y = 142;
+function naarSlide(n) {
+  if (!level2Open || n < 1 || n > 2 || n === slide) return;
+  slide = n;
   level = n;
   localStorage.setItem('kaasRoyaleStartLevel', String(n));
   piep(n === 2 ? 330 : 520, 0.1, 'triangle', 0.06);
@@ -193,30 +204,34 @@ function kiesLevel(n) {
 function tikBuitenSpel(x, y = H) {
   startAudio();
   if (toestand === 'menu') {
-    if (level2Open && y > KNOP_Y - 6 && y < KNOP_Y + KNOP_H + 6) { kiesLevel(x < W / 2 ? 1 : 2); return; }
-    const i = menuVakje(x), k = RATJES[i];
-    if (record >= k.nodig) {
-      gekozen = i;
-      localStorage.setItem('kaasRoyaleRatje', String(i));
+    // tik op een pijltje bij de naam van het level
+    if (level2Open && Math.abs(y - PIJL_Y) < 26) {
+      if (x < W / 2 - 120) { naarSlide(1); return; }
+      if (x > W / 2 + 120) { naarSlide(2); return; }
+    }
+    const lijst = slideRatjes(), k = lijst[menuVakje(x)];
+    if (ratOpen(k)) {
+      gekozen = RATJES.indexOf(k);
+      localStorage.setItem('kaasRoyaleRatje', String(gekozen));
       nieuwSpel();
-      if (startLevel === 2) startLevel2();
+      if (slide === 2) startLevel2();
     } else {
-      melding = '🔒 ' + k.naam + ': haal eerst ' + k.nodig + ' punten';
+      melding = '🔒 ' + k.naam + ': haal eerst ' + k.nodig + ' punten in level ' + ratLevel(k);
       meldingTijd = 2.2;
       piep(180, 0.15, 'square', 0.05);
     }
   } else if (toestand === 'af' && afSinds > 0.7) {
     toestand = 'menu';
-    level = startLevel;
+    level = slide;
   }
 }
 
-let veegStartY = null, geveegd = false;
+let veegStartY = null, geveegd = false, menuStart = null;
 canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   startAudio();
   const t = e.changedTouches[0];
-  if (toestand !== 'spelen') { tikBuitenSpel(t.clientX / schaal, t.clientY / schaal); veegStartY = null; return; }
+  if (toestand !== 'spelen') { menuStart = { x: t.clientX / schaal, y: t.clientY / schaal }; veegStartY = null; return; }
   veegStartY = t.clientY; geveegd = false;
 }, { passive: false });
 canvas.addEventListener('touchmove', e => {
@@ -226,6 +241,14 @@ canvas.addEventListener('touchmove', e => {
 }, { passive: false });
 canvas.addEventListener('touchend', e => {
   e.preventDefault();
+  if (menuStart && toestand !== 'spelen') {
+    const t = e.changedTouches[0], dx = t.clientX / schaal - menuStart.x;
+    if (toestand === 'menu' && Math.abs(dx) > 60) naarSlide(dx < 0 ? slide + 1 : slide - 1);   // vegen = andere slide
+    else tikBuitenSpel(menuStart.x, menuStart.y);
+    menuStart = null;
+    return;
+  }
+  menuStart = null;
   if (veegStartY !== null && !geveegd) springen();
   veegStartY = null; vingerOmlaag = false;
 }, { passive: false });
@@ -236,9 +259,11 @@ window.addEventListener('keydown', e => {
   if (['Space', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
   if (toestand !== 'spelen') {
     const cijfer = Number(e.key);
-    if (toestand === 'menu' && level2Open && (e.code === 'ArrowUp' || e.code === 'ArrowDown')) { kiesLevel(startLevel === 1 ? 2 : 1); return; }
-    if (cijfer >= 1 && cijfer <= RATJES.length) tikBuitenSpel((cijfer - 0.5) * W / RATJES.length);
-    else if (e.code === 'Space' || e.code === 'Enter') tikBuitenSpel((gekozen + 0.5) * W / RATJES.length);
+    const n = slideRatjes().length;
+    if (toestand === 'menu' && e.code === 'ArrowLeft') { naarSlide(slide - 1); return; }
+    if (toestand === 'menu' && e.code === 'ArrowRight') { naarSlide(slide + 1); return; }
+    if (cijfer >= 1 && cijfer <= n) tikBuitenSpel((cijfer - 0.5) * W / n);
+    else if (e.code === 'Space' || e.code === 'Enter') tikBuitenSpel((Math.max(0, slideRatjes().indexOf(RATJES[gekozen])) + 0.5) * W / n);
     return;
   }
   if ((e.code === 'Space' || e.code === 'ArrowUp') && !e.repeat) springen();
@@ -367,7 +392,9 @@ function maakPut() {
   if (voet.actief) voet.fase = 'gaat';
 }
 function startLevel2() {
+  if (level === 1 && toestand === 'overgang') bewaarRecord();   // je punten van level 1 tellen voor je record
   level = 2;
+  score = 0;   // in level 2 beginnen de punten opnieuw
   if (!level2Open) { level2Open = true; localStorage.setItem('kaasRoyaleLevel2', '1'); }
   levelStart = afstand;
   put = null;
@@ -710,10 +737,17 @@ function af(soort) {
     clown: 'Toet! Getrapt door de clown.',
   }[soort];
   piep(220, 0.45, 'sawtooth', 0.08, 55);
-  vrijgespeeld = RATJES.filter(k => k.nodig > record && k.nodig <= score);
-  if (score > record) {
+  bewaarRecord();
+}
+// Bewaar je punten als record van dit level, en kijk of er nieuwe ratjes vrij zijn
+function bewaarRecord() {
+  const oud = recordVan(level);
+  vrijgespeeld = RATJES.filter(k => ratLevel(k) === level && k.nodig > oud && k.nodig <= score);
+  nieuwRecord = score > oud;
+  if (!nieuwRecord) return;
+  if (level === 2) { record2 = score; localStorage.setItem('kaasRoyaleRecord2', String(record2)); }
+  else {
     record = score;
-    nieuwRecord = true;
     localStorage.setItem('kaasRoyaleRecord', String(record));
     if (record >= INSTELLINGEN.levelPunten && !level2Open) { level2Open = true; localStorage.setItem('kaasRoyaleLevel2', '1'); }
   }
@@ -927,6 +961,24 @@ function tekenRat(x, y, k, bukt, fase, grootte = 1) {
   ctx.beginPath(); ctx.arc(17, oy, or, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = k.roze;
   ctx.beginPath(); ctx.arc(17, oy, or - 3, 0, Math.PI * 2); ctx.fill();
+
+  // een drolletje op zijn hoofd (Poeprat)
+  if (k.poep && !bukt) {
+    const px = 22, py = ky - 10;
+    [[0, 0, 10, 4], [0, -5, 7, 3.5], [1, -9, 4.5, 3]].forEach(([dx, dy, rx, ry]) => {
+      ctx.fillStyle = '#5a3414';
+      ctx.beginPath(); ctx.ellipse(px + dx, py + dy, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#8a5a2b';
+      ctx.beginPath(); ctx.ellipse(px + dx - rx * 0.3, py + dy - ry * 0.35, rx * 0.4, ry * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.fillStyle = '#5a3414';
+    ctx.beginPath(); ctx.moveTo(px - 1, py - 11); ctx.quadraticCurveTo(px + 3, py - 17, px + 5, py - 14); ctx.lineTo(px + 3, py - 10); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(160,220,90,0.8)'; ctx.lineWidth = 1.2;   // stinklijntjes
+    for (let i = -1; i <= 1; i += 2) {
+      const sx = px + i * 9, sy = py - 16 + Math.sin(tijd * 5 + i) * 2;
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.quadraticCurveTo(sx + 3, sy - 4, sx, sy - 8); ctx.stroke();
+    }
+  }
 
   // kroontje (Goudje)
   if (k.kroon && !bukt) {
@@ -1413,7 +1465,7 @@ function tekenScore() {
   tekst(level === 2 ? 'Level 2: het riool' : 'Level 1: de schatkamer', W / 2, 52, 13, level === 2 ? '#9dff6a' : '#ffd27a', 'center', false);
   if (put) tekst('Nog ' + Math.max(0, Math.ceil((put.x - rat.x) / 40)) + ' m tot de put', W - 18, 54, 16, '#9dff6a', 'right');
   else if (level === 1) tekst('Put bij ' + INSTELLINGEN.levelPunten + ' 🧀', W - 18, 54, 15, '#9dff6a', 'right', false);
-  tekst('Record ' + record, W - 18, 30, 18, '#ffd27a', 'right', false);
+  tekst('Record ' + recordVan(level), W - 18, 30, 18, '#ffd27a', 'right', false);
   if (voet.actief && voet.tijd > 0) tekst((voet.soort === 'clown' ? '🤡 ' : '🦶 ') + Math.ceil(voet.tijd), 18, 62, 20, '#ff9a7a', 'left');
   if (rat.boost > 0) {
     // balk die laat zien hoe lang de superkracht nog duurt
@@ -1429,45 +1481,47 @@ function tekenScore() {
 function tekenMenu() {
   ctx.fillStyle = 'rgba(20,8,0,0.5)';
   ctx.fillRect(0, 0, W, H);
-  tekst('KAAS ROYALE', W / 2, 58, 50, '#ffd23f');
-  tekst('Pak al het lekkers en ontsnap via de put naar het riool!', W / 2, 98, 16, '#fff', 'center', false);
+  tekst('KAAS ROYALE', W / 2, 52, 48, '#ffd23f');
+  tekst(slide === 2 ? 'Spring over de poep en ontwijk de clown!' : 'Pak al het lekkers en ontsnap via de put naar het riool!', W / 2, 92, 16, '#fff', 'center', false);
+
+  // naam van het level, met pijltjes en bolletjes als er een tweede slide is
+  const kleur = slide === 2 ? '#9dff6a' : '#ffd23f';
+  tekst(slide === 2 ? 'LEVEL 2: HET RIOOL' : 'LEVEL 1: DE SCHATKAMER', W / 2, PIJL_Y, 24, kleur);
   if (level2Open) {
+    const knipper = 0.55 + Math.sin(tijd * 5) * 0.45;
+    if (slide === 1) { ctx.globalAlpha = knipper; tekst('LEVEL 2  ›', W / 2 + 215, PIJL_Y, 20, '#9dff6a'); ctx.globalAlpha = 1; }
+    else tekst('‹  LEVEL 1', W / 2 - 215, PIJL_Y, 20, '#ffd23f');
     [1, 2].forEach(n => {
-      const bw = Math.min(200, W / 2 - 30), bx = n === 1 ? W / 2 - bw - 10 : W / 2 + 10;
-      const aan = startLevel === n;
-      ctx.fillStyle = aan ? (n === 2 ? '#4fa82a' : '#d4a017') : 'rgba(0,0,0,0.45)';
-      ctx.fillRect(bx, KNOP_Y, bw, KNOP_H);
-      ctx.strokeStyle = n === 2 ? '#9dff6a' : '#ffd23f'; ctx.lineWidth = 2;
-      ctx.strokeRect(bx, KNOP_Y, bw, KNOP_H);
-      tekst((n === 1 ? 'Level 1: schatkamer' : 'Level 2: riool'), bx + bw / 2, KNOP_Y + KNOP_H / 2, 16, aan ? '#fff' : '#ccc');
+      ctx.fillStyle = n === slide ? kleur : 'rgba(255,255,255,0.35)';
+      ctx.beginPath(); ctx.arc(W / 2 + (n === 1 ? -9 : 9), PIJL_Y + 22, 4.5, 0, Math.PI * 2); ctx.fill();
     });
   } else {
-    tekst('🔒 Level 2: haal ' + INSTELLINGEN.levelPunten + ' punten in level 1', W / 2, KNOP_Y + KNOP_H / 2, 15, '#9dff6a', 'center', false);
+    tekst('🔒 Level 2: haal ' + INSTELLINGEN.levelPunten + ' punten in level 1', W / 2, PIJL_Y + 24, 14, '#9dff6a', 'center', false);
   }
-  tekst(meldingTijd > 0 ? melding : 'Kies je ratje', W / 2, 132, 20, meldingTijd > 0 ? '#ff9a7a' : '#ffe9b0', 'center', meldingTijd <= 0);
+  tekst(meldingTijd > 0 ? melding : 'Kies je ratje' + (slide === 2 ? '  ·  record ' + record2 : ''), W / 2, 194, 19, meldingTijd > 0 ? '#ff9a7a' : '#ffe9b0', 'center', meldingTijd <= 0);
 
-  const vak = W / RATJES.length;
+  const lijst = slideRatjes();
+  const vak = W / lijst.length;
   const grootte = Math.min(1.5, vak / 125);
-  RATJES.forEach((k, i) => {
+  lijst.forEach((k, i) => {
     const x = vak * (i + 0.5) - 8 * grootte;
-    const open = record >= k.nodig;
-    if (i === gekozen) {
+    if (RATJES.indexOf(k) === gekozen) {
       ctx.fillStyle = 'rgba(255,210,63,0.25)';
       ctx.beginPath(); ctx.ellipse(x + 10 * grootte, G - 2, 55 * grootte, 12, 0, 0, Math.PI * 2); ctx.fill();
     }
-    if (open) {
+    if (ratOpen(k)) {
       tekenRat(x, G - 8, k, false, tijd * 4 + i * 2, grootte);
-      tekst(k.naam, x + 10 * grootte, G + 28, 20, '#fff');
+      tekst(k.naam, x + 10 * grootte, G + 28, 19, '#fff');
     } else {
       // nog op slot: alleen een schaduw
       ctx.globalAlpha = 0.6;
       tekenRat(x, G - 8, { vacht: '#140a03', buik: '#140a03', roze: '#140a03' }, false, 0, grootte);
       ctx.globalAlpha = 1;
       tekst('🔒', x + 5 * grootte, G - 35 * grootte, 24);
-      tekst(k.nodig + ' punten', x + 10 * grootte, G + 28, 17, '#ffd27a', 'center', false);
+      tekst(k.nodig + ' punten' + (ratLevel(k) === 2 ? ' (level 2)' : ''), x + 10 * grootte, G + 28, 15, '#ffd27a', 'center', false);
     }
   });
-  tekst('Tik = springen  ·  2x tikken = hoger  ·  veeg omlaag = bukken', W / 2, H - 12, 14, '#e8cfa0', 'center', false);
+  tekst(level2Open ? 'Veeg opzij voor het andere level  ·  tik op je ratje om te starten' : 'Tik = springen  ·  2x tikken = hoger  ·  veeg omlaag = bukken', W / 2, H - 12, 14, '#e8cfa0', 'center', false);
   tekst('versie ' + VERSIE, W - 8, H - 12, 11, '#8a7a60', 'right', false);
 }
 
@@ -1477,12 +1531,12 @@ function tekenAf() {
   tekst(oorzaak, W / 2, 80, 34, '#ff8a5c');
   tekst('Je pakte ' + score + ' punten', W / 2, 132, 28, '#ffe14d');
   if (nieuwRecord) tekst('Nieuw record! 🏆', W / 2, 172, 24, '#7dff9a');
-  else tekst('Record: ' + record, W / 2, 172, 20, '#ffd27a', 'center', false);
+  else tekst('Record in level ' + level + ': ' + recordVan(level), W / 2, 172, 20, '#ffd27a', 'center', false);
   if (vrijgespeeld.length) {
     tekst('Nieuw ratje vrijgespeeld: ' + vrijgespeeld.map(k => k.naam).join(' en ') + '! 🐀', W / 2, 214, 22, '#7dd8ff');
   } else {
-    const volgende = RATJES.find(k => k.nodig > record);
-    if (volgende) tekst('Nog ' + (volgende.nodig - record) + ' punten tot ' + volgende.naam, W / 2, 214, 18, '#e8cfa0', 'center', false);
+    const volgende = RATJES.find(k => ratLevel(k) === level && k.nodig > recordVan(level));
+    if (volgende) tekst('Nog ' + (volgende.nodig - recordVan(level)) + ' punten in level ' + level + ' tot ' + volgende.naam, W / 2, 214, 18, '#e8cfa0', 'center', false);
   }
   if (afSinds > 0.7) tekst('Tik om verder te gaan', W / 2, 264, 22, '#fff', 'center', false);
 }
@@ -1523,6 +1577,8 @@ function tekenen() {
     if (t > 0.6 && t < 2.3) {
       tekst('LEVEL 2', W / 2, H / 2 - 30, 54, '#7dff9a');
       tekst('Het riool 🐀', W / 2, H / 2 + 25, 26, '#fff');
+      tekst('Je punten beginnen opnieuw', W / 2, H / 2 + 62, 18, '#e8cfa0', 'center', false);
+      if (vrijgespeeld.length) tekst('Nieuw ratje: ' + vrijgespeeld.map(k => k.naam).join(' en ') + '! 🐀', W / 2, H / 2 + 96, 20, '#7dd8ff');
     }
   }
   if (W < 480) tekenDraaiTelefoon();
