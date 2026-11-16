@@ -17,7 +17,7 @@
 <canvas id="spel"></canvas>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 8
+//  KAAS ROYALE - versie 9
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -46,7 +46,7 @@ const INSTELLINGEN = {
   boomstamKans: 0.12,      // kans op een boomstam (alleen met 2x springen eroverheen)
   hoogteVerschil: 45,      // hoe hoog een opstapje in de vloer is
   voetElke: 14,            // om de hoeveel seconden de grote voet of de clown komt
-  clownKans: 0.5,          // kans dat de clown komt in plaats van de voet (0 tot 1)
+  clownKans: 0.5,          // kans dat de clown komt in plaats van de voet in level 2 (0 tot 1)
   voetDuur: 8,             // hoeveel seconden de voet achter je aan zit
 };
 
@@ -383,8 +383,8 @@ function toeter() {   // de toeter van de clown: toet-toet!
   piep(420, 0.16, 'square', 0.07, 340, 0.17);
 }
 function startVoet() {
-  // soms de grote voet, soms de clown met zijn rode ballon
-  const soort = Math.random() < INSTELLINGEN.clownKans ? 'clown' : 'voet';
+  // in level 1 altijd de grote voet; in het riool soms de clown met zijn rode ballon
+  const soort = level === 2 && Math.random() < INSTELLINGEN.clownKans ? 'clown' : 'voet';
   voet = { actief: true, soort, tijd: INSTELLINGEN.voetDuur, x: -VOET_B - 80, fase: 'komt', t: 0, volgende: 1.6, nummer: ++voetenGezien };
   if (soort === 'clown') {
     deeltjes.push({ x: W / 2, y: 120, vy: 0, leven: 1.6, tekst: 'DE CLOWN KOMT! 🎈', groot: true });
