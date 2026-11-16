@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="achter" cx="50%" cy="42%" r="70%">
+      <stop offset="0" stop-color="#7a4a16"/>
+      <stop offset="0.55" stop-color="#3d2108"/>
+      <stop offset="1" stop-color="#170a02"/>
+    </radialGradient>
+    <linearGradient id="kaas" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe066"/>
+      <stop offset="1" stop-color="#f5b400"/>
+    </linearGradient>
+    <linearGradient id="kaasZij" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f2b705"/>
+      <stop offset="1" stop-color="#c98a00"/>
+    </linearGradient>
+    <linearGradient id="goud" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff1a8"/>
+      <stop offset="0.45" stop-color="#ffcc33"/>
+      <stop offset="1" stop-color="#c4860a"/>
+    </linearGradient>
+    <linearGradient id="vacht" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b9b9bd"/>
+      <stop offset="1" stop-color="#85858b"/>
+    </linearGradient>
+  </defs>
+
+  <!-- achtergrond met gouden stralen -->
+  <rect width="1024" height="1024" fill="url(#achter)"/>
+  <g opacity="0.16" fill="#ffd34d">
+    <path d="M512 430 L380 0 L470 0 Z"/><path d="M512 430 L560 0 L650 0 Z"/>
+    <path d="M512 430 L760 0 L860 0 Z"/><path d="M512 430 L1024 90 L1024 200 Z"/>
+    <path d="M512 430 L1024 380 L1024 480 Z"/><path d="M512 430 L170 0 L260 0 Z"/>
+    <path d="M512 430 L0 90 L0 200 Z"/><path d="M512 430 L0 380 L0 480 Z"/>
+  </g>
+
+  <!-- munten op de grond -->
+  <g>
+    <ellipse cx="200" cy="790" rx="58" ry="22" fill="#c4860a"/><ellipse cx="200" cy="782" rx="58" ry="22" fill="#ffcc33"/>
+    <ellipse cx="840" cy="800" rx="58" ry="22" fill="#c4860a"/><ellipse cx="840" cy="792" rx="58" ry="22" fill="#ffcc33"/>
+    <ellipse cx="880" cy="760" rx="46" ry="18" fill="#c4860a"/><ellipse cx="880" cy="753" rx="46" ry="18" fill="#ffe066"/>
+    <path d="M150 720 l26 -34 l26 34 l-26 30 z" fill="#2fb7e0"/><path d="M164 712 l12 -14 l8 10 z" fill="#bff0ff"/>
+  </g>
+
+  <!-- de kaas -->
+  <path d="M250 560 L770 460 L790 700 L270 760 Z" fill="url(#kaasZij)"/>
+  <path d="M250 560 L770 460 L640 390 Z" fill="url(#kaas)"/>
+  <g fill="#d99a00">
+    <ellipse cx="380" cy="640" rx="34" ry="26"/><ellipse cx="520" cy="610" rx="22" ry="18"/>
+    <ellipse cx="660" cy="640" rx="40" ry="30"/><ellipse cx="460" cy="710" rx="20" ry="15"/>
+    <ellipse cx="720" cy="560" rx="18" ry="14"/><ellipse cx="560" cy="460" rx="26" ry="10"/>
+  </g>
+
+  <!-- het ratje kijkt over de kaas -->
+  <path d="M300 520 C 200 500, 150 420, 210 360" fill="none" stroke="#f2a7b5" stroke-width="22" stroke-linecap="round"/>
+  <ellipse cx="420" cy="440" rx="150" ry="110" fill="url(#vacht)"/>
+  <ellipse cx="560" cy="350" rx="118" ry="100" fill="url(#vacht)"/>
+  <ellipse cx="660" cy="380" rx="78" ry="56" fill="url(#vacht)" transform="rotate(14 660 380)"/>
+  <!-- oor -->
+  <circle cx="500" cy="250" r="62" fill="#9c9ca2"/>
+  <circle cx="500" cy="250" r="40" fill="#f2a7b5"/>
+  <!-- oog -->
+  <ellipse cx="600" cy="330" rx="26" ry="30" fill="#111"/>
+  <circle cx="610" cy="318" r="10" fill="#fff"/>
+  <!-- neus en snorharen -->
+  <circle cx="733" cy="398" r="22" fill="#e7718a"/>
+  <g stroke="#f4f4f4" stroke-width="6" stroke-linecap="round">
+    <path d="M690 410 L800 380"/><path d="M690 420 L805 430"/><path d="M685 430 L780 470"/>
+  </g>
+  <!-- pootjes op de kaas -->
+  <ellipse cx="520" cy="505" rx="34" ry="20" fill="#f2a7b5"/>
+  <ellipse cx="620" cy="485" rx="34" ry="20" fill="#f2a7b5"/>
+
+  <!-- gouden kroon -->
+  <g transform="rotate(-14 560 200)">
+    <path d="M460 230 L460 120 L505 170 L560 90 L615 170 L660 120 L660 230 Z" fill="url(#goud)" stroke="#8a5a00" stroke-width="8" stroke-linejoin="round"/>
+    <rect x="455" y="222" width="210" height="34" rx="8" fill="url(#goud)" stroke="#8a5a00" stroke-width="8"/>
+    <circle cx="560" cy="186" r="16" fill="#e0315a"/>
+    <circle cx="505" cy="200" r="10" fill="#2fb7e0"/><circle cx="615" cy="200" r="10" fill="#3ccf6e"/>
+    <circle cx="560" cy="88" r="12" fill="#fff1a8"/>
+  </g>
+
+  <!-- naam -->
+  <g font-family="Arial Black, Helvetica Neue, Arial, sans-serif" font-weight="900" text-anchor="middle">
+    <text x="512" y="915" font-size="104" fill="#2a1200" stroke="#2a1200" stroke-width="30" stroke-linejoin="round">KAAS ROYALE</text>
+    <text x="512" y="915" font-size="104" fill="url(#goud)">KAAS ROYALE</text>
+  </g>
+</svg>

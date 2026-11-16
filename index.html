@@ -7,6 +7,10 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#2a1606">
 <title>Kaas Royale</title>
+<meta name="apple-mobile-web-app-title" content="Kaas Royale">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="manifest" href="manifest.json">
 <style>
   html, body { margin: 0; height: 100%; background: #2a1606; overflow: hidden;
     touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -17,7 +21,7 @@
 <canvas id="spel"></canvas>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 11
+//  KAAS ROYALE - versie 12
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -96,7 +100,7 @@ let scrollX = 0, tijd = 0, afSinds = 0, schudden = 0, oorzaak = '', nieuwRecord 
 let melding = '', meldingTijd = 0;
 let record = Number(localStorage.getItem('kaasRoyaleRecord')) || 0;
 let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
-const VERSIE = 11;
+const VERSIE = 12;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
 let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= INSTELLINGEN.levelPunten;
 let startLevel = level2Open && localStorage.getItem('kaasRoyaleStartLevel') === '2' ? 2 : 1;
