@@ -17,7 +17,7 @@
 <canvas id="spel"></canvas>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 10
+//  KAAS ROYALE - versie 11
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -45,8 +45,7 @@ const INSTELLINGEN = {
   kleinGatKans: 0.15,      // kans op een klein gat waar je overheen springt
   boomstamKans: 0.12,      // kans op een boomstam (alleen met 2x springen eroverheen)
   hoogteVerschil: 45,      // hoe hoog een opstapje in de vloer is
-  voetElke: 14,            // om de hoeveel seconden de grote voet of de clown komt
-  clownKans: 0.5,          // kans dat de clown komt in plaats van de voet in level 2 (0 tot 1)
+  voetElke: 14,            // om de hoeveel seconden de voet (level 1) of de clown (level 2) komt
   voetDuur: 8,             // hoeveel seconden de voet achter je aan zit
   aftellen: 2,             // hoeveel seconden het spel aftelt voordat de voet trapt
 };
@@ -97,7 +96,9 @@ let scrollX = 0, tijd = 0, afSinds = 0, schudden = 0, oorzaak = '', nieuwRecord 
 let melding = '', meldingTijd = 0;
 let record = Number(localStorage.getItem('kaasRoyaleRecord')) || 0;
 let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
-let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1';
+const VERSIE = 11;
+// level 2 blijft open: ook als je record ooit hoog genoeg was
+let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= INSTELLINGEN.levelPunten;
 let startLevel = level2Open && localStorage.getItem('kaasRoyaleStartLevel') === '2' ? 2 : 1;
 level = startLevel;   // het menu laat de achtergrond van het gekozen level zien
 if (!RATJES[gekozen] || RATJES[gekozen].nodig > record) gekozen = 0;
@@ -384,8 +385,8 @@ function toeter() {   // de toeter van de clown: toet-toet!
   piep(420, 0.16, 'square', 0.07, 340, 0.17);
 }
 function startVoet() {
-  // in level 1 altijd de grote voet; in het riool soms de clown met zijn rode ballon
-  const soort = level === 2 && Math.random() < INSTELLINGEN.clownKans ? 'clown' : 'voet';
+  // in level 1 de grote voet, in het riool de clown met zijn rode ballon
+  const soort = level === 2 ? 'clown' : 'voet';
   voet = { actief: true, soort, tijd: INSTELLINGEN.voetDuur, x: -VOET_B - 80, fase: 'komt', t: 0, volgende: 1.6, nummer: ++voetenGezien };
   if (soort === 'clown') {
     deeltjes.push({ x: W / 2, y: 120, vy: 0, leven: 1.6, tekst: 'DE CLOWN KOMT! 🎈', groot: true });
@@ -709,6 +710,7 @@ function af(soort) {
     record = score;
     nieuwRecord = true;
     localStorage.setItem('kaasRoyaleRecord', String(record));
+    if (record >= INSTELLINGEN.levelPunten && !level2Open) { level2Open = true; localStorage.setItem('kaasRoyaleLevel2', '1'); }
   }
 }
 
@@ -1461,6 +1463,7 @@ function tekenMenu() {
     }
   });
   tekst('Tik = springen  ·  2x tikken = hoger  ·  veeg omlaag = bukken', W / 2, H - 12, 14, '#e8cfa0', 'center', false);
+  tekst('versie ' + VERSIE, W - 8, H - 12, 11, '#8a7a60', 'right', false);
 }
 
 function tekenAf() {
