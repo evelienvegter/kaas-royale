@@ -21,7 +21,7 @@
 <canvas id="spel"></canvas>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 15
+//  KAAS ROYALE - versie 16
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -110,7 +110,7 @@ let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
 const ratLevel = k => k.level || 1;
 const recordVan = n => n === 3 ? record3 : n === 2 ? record2 : record;
 const ratOpen = k => recordVan(ratLevel(k)) >= k.nodig;
-const VERSIE = 15;
+const VERSIE = 16;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
 let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= INSTELLINGEN.levelPunten;
 let level3Open = localStorage.getItem('kaasRoyaleLevel3') === '1' || record2 >= INSTELLINGEN.levelPunten;
@@ -211,8 +211,32 @@ function naarSlide(n) {
   localStorage.setItem('kaasRoyaleStartLevel', String(n));
   piep([0, 520, 330, 420][n], 0.1, 'triangle', 0.06);
 }
+// Geheime code: tik 5 keer snel op de titel. Hier staat alleen een versleutelde versie van de code.
+const GEHEIM = '7cc7def1463d2b0d5caba1bfaefec6ab5294595b2b05d9e94998057825a9d5d4';
+let titelTikken = [];
+async function vraagGeheimeCode() {
+  const code = (window.prompt('Geheime code?') || '').trim().toLowerCase();
+  if (!code || !window.crypto || !crypto.subtle) return;
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(code));
+  const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  if (hex === GEHEIM) {
+    openLevel(2); openLevel(3);
+    melding = '🔓 Geheime code! Level 2 en 3 zijn open';
+    [523, 659, 784, 1047].forEach((t, i) => piep(t, 0.14, 'square', 0.06, 0, i * 0.08));
+  } else {
+    melding = '❌ Verkeerde code';
+    piep(180, 0.2, 'square', 0.05);
+  }
+  meldingTijd = 3;
+}
 function tikBuitenSpel(x, y = H) {
   startAudio();
+  if (toestand === 'menu' && y < 75) {
+    const nu = performance.now();
+    titelTikken = titelTikken.filter(t => nu - t < 2500).concat(nu);
+    if (titelTikken.length >= 5) { titelTikken = []; vraagGeheimeCode(); }
+    return;
+  }
   if (toestand === 'menu') {
     // tik op een pijltje bij de naam van het level
     if (level2Open && Math.abs(y - PIJL_Y) < 26) {
