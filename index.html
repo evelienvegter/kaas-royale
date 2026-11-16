@@ -21,7 +21,7 @@
 <canvas id="spel"></canvas>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 14
+//  KAAS ROYALE - versie 15
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -63,10 +63,13 @@ const RATJES = [
   { naam: 'Radio',  nodig: 500, vacht: '#4cff3a', buik: '#b8ff9e', roze: '#c8ff7a', straling: true },
   // ratjes voor level 2 (punten in het riool)
   { naam: 'Poeprat', nodig: 150, level: 2, vacht: '#6b4423', buik: '#a8794c', roze: '#e8a0a8', poep: true },
+  // ratjes voor level 3 (punten in de keuken)
+  { naam: 'Chef',    nodig: 150, level: 3, vacht: '#7c8796', buik: '#c5ccd6', roze: '#f2a7b5', koksmuts: true },
 ];
 
 // ----- Het lekkers in de schatkamer -----
 const LEKKERS = ['🧀', '🍰', '🍪', '🍩', '🍓', '🧁', '🍫', '🥐', '🍕'];
+const KEUKEN_LEKKERS = ['🧀', '🥐', '🥖', '🍅', '🍓', '🧁', '🍰', '🍕'];   // level 3; de gouden bonus is een pan ratatouille 🍲
 const SUPERSNOEPJE = '🍭';
 
 // =====================================================================
@@ -102,15 +105,22 @@ let scrollX = 0, tijd = 0, afSinds = 0, schudden = 0, oorzaak = '', nieuwRecord 
 let melding = '', meldingTijd = 0;
 let record = Number(localStorage.getItem('kaasRoyaleRecord')) || 0;      // record in level 1
 let record2 = Number(localStorage.getItem('kaasRoyaleRecord2')) || 0;    // record in level 2
+let record3 = Number(localStorage.getItem('kaasRoyaleRecord3')) || 0;    // record in level 3
 let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
 const ratLevel = k => k.level || 1;
-const recordVan = n => n === 2 ? record2 : record;
+const recordVan = n => n === 3 ? record3 : n === 2 ? record2 : record;
 const ratOpen = k => recordVan(ratLevel(k)) >= k.nodig;
-const VERSIE = 14;
+const VERSIE = 15;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
 let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= INSTELLINGEN.levelPunten;
+let level3Open = localStorage.getItem('kaasRoyaleLevel3') === '1' || record2 >= INSTELLINGEN.levelPunten;
+const hoogsteSlide = () => level3Open ? 3 : level2Open ? 2 : 1;
+function openLevel(n) {
+  if (n === 2 && !level2Open) { level2Open = true; localStorage.setItem('kaasRoyaleLevel2', '1'); }
+  if (n === 3 && !level3Open) { level3Open = true; localStorage.setItem('kaasRoyaleLevel3', '1'); }
+}
 // het beginscherm heeft een slide per level; level 2 komt erbij als je hem gehaald hebt
-let slide = level2Open && localStorage.getItem('kaasRoyaleStartLevel') === '2' ? 2 : 1;
+let slide = Math.min(hoogsteSlide(), Number(localStorage.getItem('kaasRoyaleStartLevel')) || 1);
 level = slide;   // het menu laat de achtergrond van dat level zien
 if (!RATJES[gekozen] || !ratOpen(RATJES[gekozen])) gekozen = 0;
 let omlaagIngedrukt = false, vingerOmlaag = false;
@@ -186,8 +196,8 @@ function bukken() {
 }
 
 // Welk vakje in het menu hoort bij deze plek?
-// Welke ratjes staan op deze slide? Op slide 1 de ratjes van level 1, op slide 2 allemaal
-function slideRatjes(n = slide) { return RATJES.filter(k => n === 2 || ratLevel(k) === 1); }
+// Welke ratjes staan op deze slide? De ratjes van dit level en de levels ervoor
+function slideRatjes(n = slide) { return RATJES.filter(k => ratLevel(k) <= n); }
 function menuVakje(x) {
   const lijst = slideRatjes();
   return Math.max(0, Math.min(lijst.length - 1, Math.floor(x / (W / lijst.length))));
@@ -195,26 +205,26 @@ function menuVakje(x) {
 // Naar de andere slide van het beginscherm
 const PIJL_Y = 142;
 function naarSlide(n) {
-  if (!level2Open || n < 1 || n > 2 || n === slide) return;
+  if (n < 1 || n > hoogsteSlide() || n === slide) return;
   slide = n;
   level = n;
   localStorage.setItem('kaasRoyaleStartLevel', String(n));
-  piep(n === 2 ? 330 : 520, 0.1, 'triangle', 0.06);
+  piep([0, 520, 330, 420][n], 0.1, 'triangle', 0.06);
 }
 function tikBuitenSpel(x, y = H) {
   startAudio();
   if (toestand === 'menu') {
     // tik op een pijltje bij de naam van het level
     if (level2Open && Math.abs(y - PIJL_Y) < 26) {
-      if (x < W / 2 - 120) { naarSlide(1); return; }
-      if (x > W / 2 + 120) { naarSlide(2); return; }
+      if (x < W / 2 - 120) { naarSlide(slide - 1); return; }
+      if (x > W / 2 + 120) { naarSlide(slide + 1); return; }
     }
     const lijst = slideRatjes(), k = lijst[menuVakje(x)];
     if (ratOpen(k)) {
       gekozen = RATJES.indexOf(k);
       localStorage.setItem('kaasRoyaleRatje', String(gekozen));
       nieuwSpel();
-      if (slide === 2) startLevel2();
+      if (slide > 1) startLevel(slide);
     } else {
       melding = '🔒 ' + k.naam + ': haal eerst ' + k.nodig + ' punten in level ' + ratLevel(k);
       meldingTijd = 2.2;
@@ -391,11 +401,11 @@ function maakPut() {
   voetTimer = 999;
   if (voet.actief) voet.fase = 'gaat';
 }
-function startLevel2() {
-  if (level === 1 && toestand === 'overgang') bewaarRecord();   // je punten van level 1 tellen voor je record
-  level = 2;
-  score = 0;   // in level 2 beginnen de punten opnieuw
-  if (!level2Open) { level2Open = true; localStorage.setItem('kaasRoyaleLevel2', '1'); }
+function startLevel(n) {
+  if (toestand === 'overgang') bewaarRecord();   // je punten van het vorige level tellen voor je record
+  level = n;
+  score = 0;   // in elk level beginnen de punten opnieuw
+  openLevel(n);
   levelStart = afstand;
   put = null;
   dingen = []; lekkers = []; gaten = []; deeltjes = [];
@@ -415,11 +425,21 @@ function toeter() {   // de toeter van de clown: toet-toet!
   piep(420, 0.12, 'square', 0.07, 360);
   piep(420, 0.16, 'square', 0.07, 340, 0.17);
 }
+function blazen() {   // de kat blaast: kssshh!
+  piep(1400, 0.45, 'sawtooth', 0.035, 500);
+  piep(1900, 0.4, 'square', 0.02, 700, 0.02);
+}
+function miauw(boos) {
+  piep(boos ? 700 : 520, 0.35, 'triangle', 0.08, boos ? 380 : 900);
+}
 function startVoet() {
-  // in level 1 de grote voet, in het riool de clown met zijn rode ballon
-  const soort = level === 2 ? 'clown' : 'voet';
+  // level 1 de grote voet, het riool de clown met zijn rode ballon, de keuken de kat
+  const soort = ['', 'voet', 'clown', 'kat'][level];
   voet = { actief: true, soort, tijd: INSTELLINGEN.voetDuur, x: -VOET_B - 80, fase: 'komt', t: 0, volgende: 1.6, nummer: ++voetenGezien };
-  if (soort === 'clown') {
+  if (soort === 'kat') {
+    deeltjes.push({ x: W / 2, y: 120, vy: 0, leven: 1.6, tekst: 'DE KAT KOMT! 🐈', groot: true });
+    blazen();
+  } else if (soort === 'clown') {
     deeltjes.push({ x: W / 2, y: 120, vy: 0, leven: 1.6, tekst: 'DE CLOWN KOMT! 🎈', groot: true });
     toeter();
   } else {
@@ -467,7 +487,7 @@ function voetBijwerken(dt) {
     if (voet.t >= INSTELLINGEN.aftellen) { voet.fase = 'aanloop'; voet.t = 0; piep(990, 0.15, 'triangle', 0.08); }
   } else if (voet.fase === 'aanloop') {
     voet.x = rust - 50 * Math.min(1, voet.t / 0.45);
-    if (voet.t >= 0.5) { voet.fase = 'trap'; voet.t = 0; if (voet.soort === 'clown') toeter(); else piep(200, 0.2, 'sawtooth', 0.06, 90); }
+    if (voet.t >= 0.5) { voet.fase = 'trap'; voet.t = 0; if (voet.soort === 'clown') toeter(); else if (voet.soort === 'kat') miauw(false); else piep(200, 0.2, 'sawtooth', 0.06, 90); }
   } else if (voet.fase === 'trap') {
     // snel uithalen en meteen weer terug, zodat je ook kunt ontwijken als je meteen springt
     const doel = rat.x + 50 - VOET_B;
@@ -477,6 +497,7 @@ function voetBijwerken(dt) {
       if (toestand === 'spelen') {
         score += 5;
         deeltjes.push({ x: rat.x + 10, y: rat.y - 70, vy: -60, leven: 0.8, tekst: 'Ontweken! +5', goud: true });
+        if (voet.soort === 'kat') miauw(true);   // boze kat
       }
     }
   } else if (voet.fase === 'terug') {
@@ -490,7 +511,7 @@ function voetBijwerken(dt) {
 
   // stampen tijdens het lopen
   const loopt = voet.fase === 'komt' || voet.fase === 'loopt';
-  if (voet.soort === 'clown') {
+  if (voet.soort !== 'voet') {
     voet.til = loopt ? Math.abs(Math.sin(tijd * 9)) * 7 : 0;   // de clown huppelt
   } else {
     voet.til = loopt ? Math.abs(Math.sin(tijd * 5)) * 26 : 0;
@@ -499,13 +520,14 @@ function voetBijwerken(dt) {
 }
 function voetVak() {
   const y = vloerY(rat.x);
-  if (voet.soort === 'clown') return { l: voet.x + VOET_B - 64, r: voet.x + VOET_B - 4, b: y - 26, o: y };   // alleen zijn grote schoen
+  if (voet.soort !== 'voet') return { l: voet.x + VOET_B - 64, r: voet.x + VOET_B - 4, b: y - 26, o: y };   // alleen de schoen of de klauw
   return { l: voet.x + 10, r: voet.x + VOET_B - 4, b: y - 30, o: y };
 }
 
 function maakLekker(x, y) {
   const goud = Math.random() < INSTELLINGEN.kansOpGoud;
-  lekkers.push({ x, y, soort: goud ? '🧀' : kies(LEKKERS), goud, fase: Math.random() * 6 });
+  const keuken = level === 3;
+  lekkers.push({ x, y, soort: goud ? (keuken ? '🍲' : '🧀') : kies(keuken ? KEUKEN_LEKKERS : LEKKERS), goud, fase: Math.random() * 6 });
 }
 
 // ----- Botsen -----
@@ -540,8 +562,9 @@ function bijwerken(dt) {
   if (toestand === 'menu') { scrollX += 40 * dt; return; }
   if (toestand === 'overgang') {
     overgangT += dt;
-    if (overgangT < 1) { rat.x += (put.x + 20 - rat.x) * Math.min(1, 8 * dt); rat.y += 260 * dt; }
-    if (overgangT >= 1 && !levelGewisseld) { levelGewisseld = true; startLevel2(); }
+    // in de put naar beneden (level 1), of door de pijp omhoog (level 2)
+    if (overgangT < 1) { rat.x += (put.x + 20 - rat.x) * Math.min(1, 8 * dt); rat.y += (level === 2 ? -380 : 260) * dt; }
+    if (overgangT >= 1 && !levelGewisseld) { levelGewisseld = true; startLevel(level + 1); }
     if (overgangT >= 2.4) toestand = 'spelen';
     return;
   }
@@ -607,7 +630,7 @@ function bijwerken(dt) {
 
   // Nieuwe dingen maken
   tijdSindsGat += dt;
-  if (level === 1 && !put && score >= INSTELLINGEN.levelPunten) maakPut();
+  if (level < 3 && !put && score >= INSTELLINGEN.levelPunten) maakPut();
   // terwijl de voet aftelt en trapt komen er geen nieuwe obstakels
   if (voet.actief && (voet.wacht || ['aftellen', 'aanloop', 'trap'].includes(voet.fase))) volgendObstakel = Math.max(volgendObstakel, 0.4);
   volgendObstakel -= dt;
@@ -720,13 +743,22 @@ function af(soort) {
   toestand = 'af';
   afSinds = 0;
   schudden = 0.35;
-  oorzaak = (level === 2 ? {
-    val: 'Bah! In de poep gestapt.',
-    kist: 'Oeps! Tegen het wc-papier.',
-    luchter: 'Au! Tegen de rioolbuis.',
-    stam: 'Boink! Tegen de grote buis.',
-    gat: 'Plons! In het rioolwater.',
-  }[soort] : null) || {
+  oorzaak = ({
+    2: {
+      val: 'Bah! In de poep gestapt.',
+      kist: 'Oeps! Tegen het wc-papier.',
+      luchter: 'Au! Tegen de rioolbuis.',
+      stam: 'Boink! Tegen de grote buis.',
+      gat: 'Plons! In het rioolwater.',
+    },
+    3: {
+      val: 'Hatsjoe! Tegen de peper en het zout.',
+      kist: 'Au! In de messen.',
+      luchter: 'Bonk! Tegen de koekenpan.',
+      stam: 'Klonk! Tegen de soeppan.',
+      gat: 'Au, heet! Op het gasfornuis.',
+    },
+  }[level] || {})[soort] || {
     val: 'Klap! In de muizenval.',
     kist: 'Bonk! Tegen een schatkist.',
     luchter: 'Au! Tegen de kroonluchter.',
@@ -735,6 +767,7 @@ function af(soort) {
     stam: 'Boink! Tegen de boomstam.',
     voet: 'Pats! Getrapt door de grote voet.',
     clown: 'Toet! Getrapt door de clown.',
+    kat: 'Miauw! Gepakt door de kat.',
   }[soort];
   piep(220, 0.45, 'sawtooth', 0.08, 55);
   bewaarRecord();
@@ -745,11 +778,15 @@ function bewaarRecord() {
   vrijgespeeld = RATJES.filter(k => ratLevel(k) === level && k.nodig > oud && k.nodig <= score);
   nieuwRecord = score > oud;
   if (!nieuwRecord) return;
-  if (level === 2) { record2 = score; localStorage.setItem('kaasRoyaleRecord2', String(record2)); }
-  else {
+  if (level === 3) { record3 = score; localStorage.setItem('kaasRoyaleRecord3', String(record3)); }
+  else if (level === 2) {
+    record2 = score;
+    localStorage.setItem('kaasRoyaleRecord2', String(record2));
+    if (record2 >= INSTELLINGEN.levelPunten) openLevel(3);
+  } else {
     record = score;
     localStorage.setItem('kaasRoyaleRecord', String(record));
-    if (record >= INSTELLINGEN.levelPunten && !level2Open) { level2Open = true; localStorage.setItem('kaasRoyaleLevel2', '1'); }
+    if (record >= INSTELLINGEN.levelPunten) openLevel(2);
   }
 }
 
@@ -757,7 +794,7 @@ function bewaarRecord() {
 //  Tekenen
 // =====================================================================
 function tekenAchtergrond() {
-  if (level === 2) tekenRiool(); else tekenSchatkamer();
+  if (level === 3) tekenKeuken(); else if (level === 2) tekenRiool(); else tekenSchatkamer();
   tekenVloer();
 }
 
@@ -822,8 +859,8 @@ function tekenSchatkamer() {
 
 function tekenVloer() {
   // Vloer, in stukken met verschillende hoogtes
-  const riool = level === 2;
-  const kleurVloer = riool ? '#3d4540' : '#3b2410', kleurRand = riool ? '#7fd13b' : '#d4a017', kleurNaad = riool ? '#2a302c' : '#2c1a0b';
+  // schatkamer: hout en goud; riool: beton en slijm; keuken: een stalen aanrecht
+  const [kleurVloer, kleurRand, kleurNaad] = [null, ['#3b2410', '#d4a017', '#2c1a0b'], ['#3d4540', '#7fd13b', '#2a302c'], ['#565d65', '#d5dde3', '#454b52']][level];
   const stukken = toestand === 'menu' ? [{ x: -10, w: W + 20, h: 0 }] : vloer;
   const t = scrollX % 64;
   for (const st of stukken) {
@@ -891,6 +928,71 @@ function tekenRiool() {
     ctx.beginPath(); ctx.ellipse(x + 80, y + 18 + val, 3, 5, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = 'rgba(127,209,59,0.5)';
     ctx.beginPath(); ctx.ellipse(x + 80, y + 22, 8, 4, 0, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+function tekenKeuken() {
+  // een donkere keuken bij nacht, met maanlicht
+  const lucht = ctx.createLinearGradient(0, 0, 0, G);
+  lucht.addColorStop(0, '#12161d');
+  lucht.addColorStop(1, '#262d38');
+  ctx.fillStyle = lucht;
+  ctx.fillRect(0, 0, W, G);
+
+  // tegeltjes aan de muur (bewegen langzaam)
+  const p = scrollX * 0.3, tegel = 34;
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2;
+  for (let y = 90; y < G; y += tegel) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  for (let x = -(p % tegel); x < W; x += tegel) { ctx.beginPath(); ctx.moveTo(x, 90); ctx.lineTo(x, G); ctx.stroke(); }
+  ctx.fillStyle = 'rgba(255,255,255,0.03)';
+  ctx.fillRect(0, 90, W, G - 90);
+
+  // ramen met de maan en een rek met pannen
+  const q = scrollX * 0.4, tussen = 520;
+  for (let i = Math.floor(q / tussen) - 1; i * tussen - q < W + tussen; i++) {
+    const x = i * tussen - q;
+    // raam
+    ctx.fillStyle = '#0b1530'; ctx.fillRect(x + 40, 20, 120, 110);
+    ctx.fillStyle = '#f4f0d0';
+    ctx.beginPath(); ctx.arc(x + 120, 55, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0b1530';
+    ctx.beginPath(); ctx.arc(x + 112, 50, 14, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#3a3226'; ctx.lineWidth = 6;
+    ctx.strokeRect(x + 40, 20, 120, 110);
+    ctx.beginPath(); ctx.moveTo(x + 100, 20); ctx.lineTo(x + 100, 130); ctx.moveTo(x + 40, 75); ctx.lineTo(x + 160, 75); ctx.stroke();
+    const licht = ctx.createLinearGradient(0, 130, 0, G);
+    licht.addColorStop(0, 'rgba(170,190,255,0.12)');
+    licht.addColorStop(1, 'rgba(170,190,255,0)');
+    ctx.fillStyle = licht;
+    ctx.beginPath(); ctx.moveTo(x + 40, 130); ctx.lineTo(x + 160, 130); ctx.lineTo(x + 230, G); ctx.lineTo(x + 70, G); ctx.closePath(); ctx.fill();
+    // rek met pannen en een pollepel
+    ctx.fillStyle = '#6b7178'; ctx.fillRect(x + 250, 40, 200, 6);
+    [[280, 26], [340, 34], [410, 22]].forEach(([px, r], j) => {
+      const zwaai = Math.sin(tijd * 1.5 + i + j) * 0.06;
+      ctx.save(); ctx.translate(x + px, 46); ctx.rotate(zwaai);
+      ctx.strokeStyle = '#2b2f34'; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 30); ctx.stroke();
+      ctx.fillStyle = j === 1 ? '#b8743a' : '#3a3f45';
+      ctx.beginPath(); ctx.arc(0, 30 + r, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.beginPath(); ctx.arc(-r * 0.3, 30 + r * 0.7, r * 0.4, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    });
+  }
+  // een fornuis met een dampende pan (dichterbij)
+  const r = scrollX * 0.6, tussen2 = 640;
+  for (let i = Math.floor(r / tussen2) - 1; i * tussen2 - r < W + tussen2; i++) {
+    const x = i * tussen2 - r + hash(i) * 120, y = G - 70;
+    ctx.fillStyle = '#2a2f36'; ctx.fillRect(x, y, 150, 70);
+    ctx.fillStyle = '#ff7a2a';
+    ctx.fillRect(x + 20, y + 30, 110, 4);
+    ctx.fillStyle = '#4a4f57'; ctx.fillRect(x + 35, y - 40, 80, 40);
+    ctx.fillStyle = '#5c626b'; ctx.fillRect(x + 30, y - 44, 90, 8);
+    for (let k = 0; k < 3; k++) {
+      const t = (tijd * 0.6 + k / 3) % 1;
+      ctx.fillStyle = 'rgba(220,230,240,' + (0.25 * (1 - t)) + ')';
+      ctx.beginPath(); ctx.arc(x + 60 + k * 15 + Math.sin(t * 6 + k) * 8, y - 50 - t * 90, 10 + t * 14, 0, Math.PI * 2); ctx.fill();
+    }
   }
 }
 
@@ -978,6 +1080,15 @@ function tekenRat(x, y, k, bukt, fase, grootte = 1) {
       const sx = px + i * 9, sy = py - 16 + Math.sin(tijd * 5 + i) * 2;
       ctx.beginPath(); ctx.moveTo(sx, sy); ctx.quadraticCurveTo(sx + 3, sy - 4, sx, sy - 8); ctx.stroke();
     }
+  }
+
+  // koksmuts (Chef)
+  if (k.koksmuts && !bukt) {
+    ctx.fillStyle = '#f7f7f7';
+    ctx.fillRect(16, ky - 17, 18, 8);
+    [[18, -22, 7], [25, -26, 8], [32, -22, 7]].forEach(([dx, dy, r]) => { ctx.beginPath(); ctx.arc(dx, ky + dy, r, 0, Math.PI * 2); ctx.fill(); });
+    ctx.strokeStyle = '#d4d4d4'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(16, ky - 12); ctx.lineTo(34, ky - 12); ctx.stroke();
   }
 
   // kroontje (Goudje)
@@ -1101,7 +1212,72 @@ function tekenRioolObstakel(o) {
   }
 }
 
+function tekenKeukenObstakel(o) {
+  const v = o.v;
+  if (o.soort === 'val') {
+    // peper- en zoutvaatje
+    [[o.x + 8, '#f2f2f2', '#c9c9c9'], [o.x + 28, '#3a3a3a', '#222']].forEach(([x, kleur, donker]) => {
+      ctx.fillStyle = kleur; ctx.fillRect(x, v - 15, 16, 15);
+      ctx.fillStyle = '#b8bfc6'; ctx.fillRect(x - 1, v - 21, 18, 7);
+      ctx.fillStyle = donker;
+      for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(x + 4 + i * 4, v - 18, 1, 0, Math.PI * 2); ctx.fill(); }
+    });
+  } else if (o.soort === 'kist') {
+    // messen rechtop in een snijplank
+    ctx.fillStyle = '#a8743f'; ctx.fillRect(o.x, v - 10, o.w, 10);
+    ctx.fillStyle = '#8a5d30'; ctx.fillRect(o.x, v - 3, o.w, 3);
+    [8, 22, 36].forEach((dx, i) => {
+      const h = [24, 29, 22][i];   // niet hoger dan het stuk waar je tegenaan botst
+      ctx.fillStyle = '#d9e0e6';
+      ctx.beginPath(); ctx.moveTo(o.x + dx - 3, v - 10); ctx.lineTo(o.x + dx - 3, v - 10 - h); ctx.lineTo(o.x + dx + 4, v - 10 - h + 8); ctx.lineTo(o.x + dx + 4, v - 10); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(o.x + dx - 2, v - 10 - h + 4, 1.5, h - 6);
+    });
+  } else if (o.soort === 'stam') {
+    // een grote ronde soeppan met damp
+    const cx = o.x + o.r, cy = v - o.r;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(cx, v + 2, o.r, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#3c4148';
+    ctx.beginPath(); ctx.arc(cx, cy + 6, o.r - 2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#545a62';
+    ctx.beginPath(); ctx.arc(cx - 12, cy - 6, o.r - 22, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2b2f34';   // handvatten en rand
+    ctx.fillRect(cx - o.r - 8, cy - 14, 14, 8); ctx.fillRect(cx + o.r - 6, cy - 14, 14, 8);
+    ctx.fillStyle = '#6b727a'; ctx.fillRect(cx - o.r + 4, cy - o.r + 6, (o.r - 4) * 2, 10);
+    ctx.fillStyle = '#d2552a';   // rode soep die bijna overkookt
+    ctx.beginPath(); ctx.ellipse(cx, cy - o.r + 8, o.r - 8, 6, 0, 0, Math.PI * 2); ctx.fill();
+    for (let k = 0; k < 3; k++) {
+      const t = (tijd * 0.8 + k / 3) % 1;
+      ctx.fillStyle = 'rgba(230,235,240,' + (0.35 * (1 - t)) + ')';
+      ctx.beginPath(); ctx.arc(cx - 20 + k * 20, cy - o.r - t * 50, 6 + t * 10, 0, Math.PI * 2); ctx.fill();
+    }
+    if (o.nummer <= 3) {
+      ctx.globalAlpha = 0.6 + Math.sin(tijd * 10) * 0.4;
+      tekst('2x springen! ⬆⬆', cx, cy - o.r - 40, 18, '#7dff9a');
+      ctx.globalAlpha = 1;
+    }
+  } else {
+    // een koekenpan die aan een haak hangt
+    const cx = o.x + o.w / 2, onder = v - 30;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(cx, v + 2, o.w / 2, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#8a9096'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, onder - 70); ctx.stroke();
+    ctx.fillStyle = '#2b2f34'; ctx.fillRect(cx - 4, onder - 72, 8, 36);   // steel
+    ctx.fillStyle = '#33383f';
+    ctx.beginPath(); ctx.ellipse(cx, onder - 18, o.w / 2, 20, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#4b5159';
+    ctx.beginPath(); ctx.ellipse(cx - 5, onder - 22, o.w / 2 - 10, 13, 0, 0, Math.PI * 2); ctx.fill();
+    if (o.nummer <= 3) {
+      ctx.globalAlpha = 0.6 + Math.sin(tijd * 10) * 0.4;
+      tekst('⬇ bukken!', cx, v + 22, 18, '#7dff9a');
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
 function tekenObstakel(o) {
+  if (level === 3) return tekenKeukenObstakel(o);
   if (level === 2) return tekenRioolObstakel(o);
   if (o.soort === 'val') {
     const x = o.x, y = o.v;
@@ -1197,6 +1373,24 @@ function tekenObstakel(o) {
 function tekenPut() {
   if (!put) return;
   const cx = put.x + 35, v = put.v;
+  if (level === 2) {
+    // een afvoerpijp uit het plafond: daar schiet je omhoog naar de keuken
+    const onder = v - 95;
+    const licht = ctx.createLinearGradient(0, onder, 0, v);
+    licht.addColorStop(0, 'rgba(255,240,170,0.45)');
+    licht.addColorStop(1, 'rgba(255,240,170,0.05)');
+    ctx.fillStyle = licht;
+    ctx.beginPath(); ctx.moveTo(cx - 30, onder); ctx.lineTo(cx + 30, onder); ctx.lineTo(cx + 55, v); ctx.lineTo(cx - 55, v); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#5f6b63'; ctx.fillRect(cx - 34, 0, 68, onder);
+    ctx.fillStyle = '#76837a'; ctx.fillRect(cx - 34, 0, 12, onder);
+    ctx.fillStyle = '#4b5650'; ctx.fillRect(cx - 42, onder - 16, 84, 16); ctx.fillRect(cx - 42, 70, 84, 12);
+    ctx.fillStyle = '#fff6c8';
+    ctx.beginPath(); ctx.ellipse(cx, onder, 32, 7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.6 + Math.sin(tijd * 8) * 0.4;
+    tekst('⬆ DE PIJP ⬆', cx, onder + 40, 20, '#ffe680');
+    ctx.globalAlpha = 1;
+    return;
+  }
   ctx.fillStyle = '#000';
   ctx.beginPath(); ctx.ellipse(cx, v + 2, 38, 9, 0, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = '#8a8f93'; ctx.lineWidth = 4;
@@ -1219,9 +1413,9 @@ function tekenPut() {
 function tekenGat(g) {
   // het gat zelf: diep en donker
   const v = g.v;
-  const riool = level === 2;
+  const riool = level === 2, keuken = level === 3;
   const diepte = ctx.createLinearGradient(0, v, 0, H);
-  diepte.addColorStop(0, riool ? '#0e1a10' : '#120802');
+  diepte.addColorStop(0, riool ? '#0e1a10' : keuken ? '#0d0f12' : '#120802');
   diepte.addColorStop(1, '#000');
   ctx.fillStyle = diepte;
   ctx.fillRect(g.x, v, g.w, H - v);
@@ -1238,10 +1432,25 @@ function tekenGat(g) {
       ctx.beginPath(); ctx.arc(bx, H - (by - wy), 2.5, 0, Math.PI * 2); ctx.fill();
     }
   }
-  ctx.fillStyle = riool ? '#2a302c' : '#5a3816';
+  if (keuken) {
+    // een gasfornuis: rooster en blauwe vlammetjes
+    const by = v + 34;
+    ctx.fillStyle = '#1b1e22'; ctx.fillRect(g.x, by, g.w, H - by);
+    for (let x = g.x + 18; x < g.x + g.w - 10; x += 26) {
+      const hoog = 9 + Math.sin(tijd * 20 + x) * 3;
+      ctx.fillStyle = '#2f8fff';
+      ctx.beginPath(); ctx.moveTo(x - 6, by); ctx.quadraticCurveTo(x, by - hoog * 2, x + 6, by); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#a8dcff';
+      ctx.beginPath(); ctx.moveTo(x - 3, by); ctx.quadraticCurveTo(x, by - hoog, x + 3, by); ctx.closePath(); ctx.fill();
+    }
+    ctx.strokeStyle = '#3a3f45'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(g.x, by - 22); ctx.lineTo(g.x + g.w, by - 22); ctx.stroke();
+    for (let x = g.x + 30; x < g.x + g.w; x += 60) { ctx.beginPath(); ctx.moveTo(x, by - 22); ctx.lineTo(x, by); ctx.stroke(); }
+  }
+  ctx.fillStyle = riool ? '#2a302c' : keuken ? '#454b52' : '#5a3816';
   ctx.fillRect(g.x - 4, v, 4, H - v);
   ctx.fillRect(g.x + g.w, v, 4, H - v);
-  ctx.fillStyle = riool ? '#7fd13b' : '#d4a017';
+  ctx.fillStyle = riool ? '#7fd13b' : keuken ? '#d5dde3' : '#d4a017';
   ctx.fillRect(g.x - 6, v, 6, 3);
   ctx.fillRect(g.x + g.w, v, 6, 3);
 
@@ -1252,8 +1461,21 @@ function tekenGat(g) {
   }
   if (g.trampX === null) return;
 
-  // de trampoline
+  // de trampoline (in de keuken een spons)
   const tx = g.trampX, tw = g.trampW, indruk = g.indruk > 0 ? 6 * g.indruk / 0.3 : 0;
+  if (keuken) {
+    const top = g.v - 22 + indruk;
+    ctx.fillStyle = '#ffd84a'; ctx.fillRect(tx, top + 7, tw, g.v - top - 7);
+    ctx.fillStyle = '#3fae49'; ctx.fillRect(tx, top, tw, 8);
+    ctx.fillStyle = 'rgba(160,110,0,0.5)';
+    for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.arc(tx + 7 + i * 8.5, top + 13 + (i % 2) * 4, 2, 0, Math.PI * 2); ctx.fill(); }
+    if (g.nummer <= 2) {
+      ctx.globalAlpha = 0.6 + Math.sin(tijd * 10) * 0.4;
+      tekst('Spons! ⬇', tx + tw / 2, g.v - 60, 18, '#7dff9a');
+      ctx.globalAlpha = 1;
+    }
+    return;
+  }
   const G = g.v, mat = G - 14 + indruk;   // de trampoline staat op de vloer bij het gat
   ctx.strokeStyle = '#555'; ctx.lineWidth = 4;
   ctx.beginPath();
@@ -1362,8 +1584,65 @@ function tekenClown() {
   ctx.beginPath(); ctx.arc(hx + 14, hy - 1, 1.8, 0, Math.PI * 2); ctx.fill();
 }
 
+function tekenKat() {
+  const y = vloerY(rat.x) - (voet.til || 0);
+  const bx = Math.min(voet.x, voetRust());   // waar zijn lijf staat
+  const klauw = voet.x + VOET_B;              // de punt van zijn poot
+  const boos = voet.fase === 'aftellen' || voet.fase === 'aanloop' || voet.fase === 'trap';
+  const vacht = '#2c2c33', licht = '#45454f';
+
+  // staart, die heen en weer zwiept
+  ctx.strokeStyle = vacht; ctx.lineWidth = 11; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(bx + 8, y - 40);
+  ctx.quadraticCurveTo(bx - 30, y - 60 + Math.sin(tijd * 4) * 10, bx - 18 + Math.sin(tijd * 3) * 12, y - 118);
+  ctx.stroke();
+  // achterpoot en lijf (gebogen als hij aanvalt)
+  ctx.fillStyle = vacht;
+  ctx.beginPath(); ctx.ellipse(bx + 22, y - 12, 18, 12, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(bx + 50, y - (boos ? 50 : 42), 50, boos ? 30 : 26, boos ? -0.12 : 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = licht;
+  ctx.beginPath(); ctx.ellipse(bx + 55, y - 32, 30, 10, 0, 0, Math.PI * 2); ctx.fill();
+  // voorpoot met klauw, naar het ratje toe
+  ctx.strokeStyle = vacht; ctx.lineWidth = 14;
+  ctx.beginPath(); ctx.moveTo(bx + 82, y - 38); ctx.lineTo(klauw - 14, y - 9); ctx.stroke();
+  ctx.fillStyle = vacht;
+  ctx.beginPath(); ctx.ellipse(klauw - 12, y - 9, 15, 9, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#f2f2f2'; ctx.lineWidth = 2;
+  for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(klauw - 2, y - 9 + i * 4); ctx.lineTo(klauw + 6, y - 11 + i * 5); ctx.stroke(); }
+  // kop
+  const hx = bx + 102, hy = y - 72;
+  ctx.fillStyle = vacht;
+  ctx.beginPath(); ctx.moveTo(hx - 22, hy - 12); ctx.lineTo(hx - 16, hy - 40); ctx.lineTo(hx - 2, hy - 20); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(hx + 4, hy - 20); ctx.lineTo(hx + 18, hy - 40); ctx.lineTo(hx + 24, hy - 10); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.arc(hx, hy, 26, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#e88aa0';
+  ctx.beginPath(); ctx.moveTo(hx - 18, hy - 16); ctx.lineTo(hx - 15, hy - 32); ctx.lineTo(hx - 7, hy - 19); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(hx + 8, hy - 19); ctx.lineTo(hx + 17, hy - 32); ctx.lineTo(hx + 19, hy - 14); ctx.closePath(); ctx.fill();
+  // gloeiende ogen met spleetjes
+  ctx.fillStyle = '#c6ff3a';
+  ctx.beginPath(); ctx.ellipse(hx - 4, hy - 5, 7, boos ? 5 : 7, 0, 0, Math.PI * 2); ctx.ellipse(hx + 14, hy - 5, 7, boos ? 5 : 7, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#111';
+  ctx.beginPath(); ctx.ellipse(hx - 2, hy - 5, 1.8, 5, 0, 0, Math.PI * 2); ctx.ellipse(hx + 16, hy - 5, 1.8, 5, 0, 0, Math.PI * 2); ctx.fill();
+  // neus, bek en snorharen
+  ctx.fillStyle = '#e88aa0';
+  ctx.beginPath(); ctx.moveTo(hx + 18, hy + 6); ctx.lineTo(hx + 24, hy + 6); ctx.lineTo(hx + 21, hy + 10); ctx.closePath(); ctx.fill();
+  if (boos) {
+    ctx.fillStyle = '#5a0f1a';
+    ctx.beginPath(); ctx.ellipse(hx + 16, hy + 15, 9, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.moveTo(hx + 9, hy + 11); ctx.lineTo(hx + 11, hy + 18); ctx.lineTo(hx + 13, hy + 11); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(hx + 19, hy + 11); ctx.lineTo(hx + 21, hy + 18); ctx.lineTo(hx + 23, hy + 11); ctx.fill();
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(hx + 22, hy + 8); ctx.lineTo(hx + 44, hy + 2);
+  ctx.moveTo(hx + 22, hy + 10); ctx.lineTo(hx + 44, hy + 12);
+  ctx.stroke();
+}
+
 function tekenVoet() {
   if (!voet.actief) return;
+  if (voet.soort === 'kat') { tekenKat(); tekenTrapWaarschuwing(); return; }
   if (voet.soort === 'clown') { tekenClown(); tekenTrapWaarschuwing(); return; }
   const vloerOnder = vloerY(rat.x), x = voet.x, til = voet.til || 0;
   const zool = vloerOnder - til;
@@ -1462,11 +1741,12 @@ function tekst(t, x, y, grootte, kleur = '#fff', uitlijnen = 'center', dik = tru
 function tekenScore() {
   tekst('🧀 ' + score, 18, 30, 26, '#ffe14d', 'left');
   tekst(Math.floor(afstand / 40) + ' m', W / 2, 30, 20, '#fff');
-  tekst(level === 2 ? 'Level 2: het riool' : 'Level 1: de schatkamer', W / 2, 52, 13, level === 2 ? '#9dff6a' : '#ffd27a', 'center', false);
-  if (put) tekst('Nog ' + Math.max(0, Math.ceil((put.x - rat.x) / 40)) + ' m tot de put', W - 18, 54, 16, '#9dff6a', 'right');
-  else if (level === 1) tekst('Put bij ' + INSTELLINGEN.levelPunten + ' 🧀', W - 18, 54, 15, '#9dff6a', 'right', false);
+  tekst(['', 'Level 1: de schatkamer', 'Level 2: het riool', 'Level 3: de keuken'][level], W / 2, 52, 13, ['', '#ffd27a', '#9dff6a', '#ffb27a'][level], 'center', false);
+  const uitgang = level === 2 ? 'pijp' : 'put';
+  if (put) tekst('Nog ' + Math.max(0, Math.ceil((put.x - rat.x) / 40)) + ' m tot de ' + uitgang, W - 18, 54, 16, '#9dff6a', 'right');
+  else if (level < 3) tekst((level === 2 ? 'Pijp' : 'Put') + ' bij ' + INSTELLINGEN.levelPunten + ' 🧀', W - 18, 54, 15, '#9dff6a', 'right', false);
   tekst('Record ' + recordVan(level), W - 18, 30, 18, '#ffd27a', 'right', false);
-  if (voet.actief && voet.tijd > 0) tekst((voet.soort === 'clown' ? '🤡 ' : '🦶 ') + Math.ceil(voet.tijd), 18, 62, 20, '#ff9a7a', 'left');
+  if (voet.actief && voet.tijd > 0) tekst(({ voet: '🦶 ', clown: '🤡 ', kat: '🐈 ' }[voet.soort]) + Math.ceil(voet.tijd), 18, 62, 20, '#ff9a7a', 'left');
   if (rat.boost > 0) {
     // balk die laat zien hoe lang de superkracht nog duurt
     const bw = 200, bx = W / 2 - bw / 2, by = 66;
@@ -1482,23 +1762,27 @@ function tekenMenu() {
   ctx.fillStyle = 'rgba(20,8,0,0.5)';
   ctx.fillRect(0, 0, W, H);
   tekst('KAAS ROYALE', W / 2, 52, 48, '#ffd23f');
-  tekst(slide === 2 ? 'Spring over de poep en ontwijk de clown!' : 'Pak al het lekkers en ontsnap via de put naar het riool!', W / 2, 92, 16, '#fff', 'center', false);
+  const ondertitels = ['', 'Pak al het lekkers en ontsnap via de put naar het riool!', 'Spring over de poep, ontwijk de clown en zoek de pijp!', 'Pas op voor de messen, de hete pannen en de kat!'];
+  tekst(ondertitels[slide], W / 2, 92, 16, '#fff', 'center', false);
 
-  // naam van het level, met pijltjes en bolletjes als er een tweede slide is
-  const kleur = slide === 2 ? '#9dff6a' : '#ffd23f';
-  tekst(slide === 2 ? 'LEVEL 2: HET RIOOL' : 'LEVEL 1: DE SCHATKAMER', W / 2, PIJL_Y, 24, kleur);
-  if (level2Open) {
+  // naam van het level, met pijltjes naar de andere slides en een bolletje per slide
+  const namen = ['', 'LEVEL 1: DE SCHATKAMER', 'LEVEL 2: HET RIOOL', 'LEVEL 3: DE KEUKEN'];
+  const kleuren = ['', '#ffd23f', '#9dff6a', '#ffb27a'];
+  const kleur = kleuren[slide], max = hoogsteSlide();
+  tekst(namen[slide], W / 2, PIJL_Y, 24, kleur);
+  if (max > 1) {
     const knipper = 0.55 + Math.sin(tijd * 5) * 0.45;
-    if (slide === 1) { ctx.globalAlpha = knipper; tekst('LEVEL 2  ›', W / 2 + 215, PIJL_Y, 20, '#9dff6a'); ctx.globalAlpha = 1; }
-    else tekst('‹  LEVEL 1', W / 2 - 215, PIJL_Y, 20, '#ffd23f');
-    [1, 2].forEach(n => {
+    if (slide < max) { ctx.globalAlpha = knipper; tekst('LEVEL ' + (slide + 1) + '  ›', W / 2 + 215, PIJL_Y, 20, kleuren[slide + 1]); ctx.globalAlpha = 1; }
+    if (slide > 1) tekst('‹  LEVEL ' + (slide - 1), W / 2 - 215, PIJL_Y, 20, kleuren[slide - 1]);
+    for (let n = 1; n <= max; n++) {
       ctx.fillStyle = n === slide ? kleur : 'rgba(255,255,255,0.35)';
-      ctx.beginPath(); ctx.arc(W / 2 + (n === 1 ? -9 : 9), PIJL_Y + 22, 4.5, 0, Math.PI * 2); ctx.fill();
-    });
-  } else {
-    tekst('🔒 Level 2: haal ' + INSTELLINGEN.levelPunten + ' punten in level 1', W / 2, PIJL_Y + 24, 14, '#9dff6a', 'center', false);
+      ctx.beginPath(); ctx.arc(W / 2 + (n - (max + 1) / 2) * 18, PIJL_Y + 22, 4.5, 0, Math.PI * 2); ctx.fill();
+    }
   }
-  tekst(meldingTijd > 0 ? melding : 'Kies je ratje' + (slide === 2 ? '  ·  record ' + record2 : ''), W / 2, 194, 19, meldingTijd > 0 ? '#ff9a7a' : '#ffe9b0', 'center', meldingTijd <= 0);
+  if (slide === max && max < 3) {
+    tekst('🔒 Level ' + (max + 1) + ': haal ' + INSTELLINGEN.levelPunten + ' punten in level ' + max, W / 2, PIJL_Y + (max > 1 ? 40 : 24), 14, kleuren[max + 1], 'center', false);
+  }
+  tekst(meldingTijd > 0 ? melding : 'Kies je ratje' + (slide > 1 ? '  ·  record ' + recordVan(slide) : ''), W / 2, 200, 19, meldingTijd > 0 ? '#ff9a7a' : '#ffe9b0', 'center', meldingTijd <= 0);
 
   const lijst = slideRatjes();
   const vak = W / lijst.length;
@@ -1511,17 +1795,17 @@ function tekenMenu() {
     }
     if (ratOpen(k)) {
       tekenRat(x, G - 8, k, false, tijd * 4 + i * 2, grootte);
-      tekst(k.naam, x + 10 * grootte, G + 28, 19, '#fff');
+      tekst(k.naam, x + 10 * grootte, G + 28, Math.min(19, vak / 6), '#fff');
     } else {
       // nog op slot: alleen een schaduw
       ctx.globalAlpha = 0.6;
       tekenRat(x, G - 8, { vacht: '#140a03', buik: '#140a03', roze: '#140a03' }, false, 0, grootte);
       ctx.globalAlpha = 1;
       tekst('🔒', x + 5 * grootte, G - 35 * grootte, 24);
-      tekst(k.nodig + ' punten' + (ratLevel(k) === 2 ? ' (level 2)' : ''), x + 10 * grootte, G + 28, 15, '#ffd27a', 'center', false);
+      tekst(ratLevel(k) === 1 ? k.nodig + ' punten' : k.nodig + ' in level ' + ratLevel(k), x + 10 * grootte, G + 28, 14, '#ffd27a', 'center', false);
     }
   });
-  tekst(level2Open ? 'Veeg opzij voor het andere level  ·  tik op je ratje om te starten' : 'Tik = springen  ·  2x tikken = hoger  ·  veeg omlaag = bukken', W / 2, H - 12, 14, '#e8cfa0', 'center', false);
+  tekst(hoogsteSlide() > 1 ? 'Veeg opzij voor een ander level  ·  tik op je ratje om te starten' : 'Tik = springen  ·  2x tikken = hoger  ·  veeg omlaag = bukken', W / 2, H - 12, 14, '#e8cfa0', 'center', false);
   tekst('versie ' + VERSIE, W - 8, H - 12, 11, '#8a7a60', 'right', false);
 }
 
@@ -1575,8 +1859,9 @@ function tekenen() {
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
     ctx.globalAlpha = 1;
     if (t > 0.6 && t < 2.3) {
-      tekst('LEVEL 2', W / 2, H / 2 - 30, 54, '#7dff9a');
-      tekst('Het riool 🐀', W / 2, H / 2 + 25, 26, '#fff');
+      const n = levelGewisseld ? level : level + 1;
+      tekst('LEVEL ' + n, W / 2, H / 2 - 30, 54, n === 3 ? '#ffb27a' : '#7dff9a');
+      tekst(n === 3 ? 'De keuken 🍲' : 'Het riool 🐀', W / 2, H / 2 + 25, 26, '#fff');
       tekst('Je punten beginnen opnieuw', W / 2, H / 2 + 62, 18, '#e8cfa0', 'center', false);
       if (vrijgespeeld.length) tekst('Nieuw ratje: ' + vrijgespeeld.map(k => k.naam).join(' en ') + '! 🐀', W / 2, H / 2 + 96, 20, '#7dd8ff');
     }

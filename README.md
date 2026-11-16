@@ -28,6 +28,8 @@ Een ratje rent door een schatkamer vol lekkers. Gemaakt voor de telefoon (houd h
   (met poep, wc-papier, rioolbuizen en groen rioolwater in de gaten)
 - Heb je level 2 een keer gehaald, dan krijgt het beginscherm een tweede slide: veeg opzij en tik op je ratje om meteen in level 2 te beginnen
 - In level 2 beginnen de punten opnieuw, met een eigen record. Bij 150 punten in level 2 speel je de Poeprat vrij (bruin, met een drolletje op zijn hoofd)
+- Bij 500 punten in level 2 komt de pijp: daar schiet je omhoog naar level 3, de keuken (messen, peper en zout, koekenpannen,
+  een soeppan, gasfornuizen, een spons als trampoline en de kat). Bij 150 punten in level 3 speel je Chef vrij, met een koksmuts
 
 ## Zelf aanpassen
 
