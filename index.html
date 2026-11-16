@@ -21,7 +21,7 @@
 <canvas id="spel"></canvas>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 18
+//  KAAS ROYALE - versie 19
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -63,6 +63,8 @@ const RATJES = [
   { naam: 'Radio',  nodig: 500, vacht: '#4cff3a', buik: '#b8ff9e', roze: '#c8ff7a', straling: true },
   // ratjes voor level 2 (punten in het riool)
   { naam: 'Poeprat', nodig: 150, level: 2, vacht: '#6b4423', buik: '#a8794c', roze: '#e8a0a8', poep: true },
+  { naam: 'WC-rat',  nodig: 300, level: 2, vacht: '#eeebe3', buik: '#ffffff', roze: '#f2a7b5', wcpapier: true },
+  { naam: 'Slijmrat', nodig: 450, level: 2, vacht: '#3f8f2a', buik: '#8fe04a', roze: '#c8ff7a', slijm: true },
   // ratjes voor level 3 (punten in de keuken)
   { naam: 'Chef',    nodig: 150, level: 3, vacht: '#7c8796', buik: '#c5ccd6', roze: '#f2a7b5', koksmuts: true },
 ];
@@ -110,7 +112,7 @@ let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
 const ratLevel = k => k.level || 1;
 const recordVan = n => n === 3 ? record3 : n === 2 ? record2 : record;
 const ratOpen = k => recordVan(ratLevel(k)) >= k.nodig;
-const VERSIE = 18;
+const VERSIE = 19;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
 let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= INSTELLINGEN.levelPunten;
 let level3Open = localStorage.getItem('kaasRoyaleLevel3') === '1' || record2 >= INSTELLINGEN.levelPunten;
@@ -1096,6 +1098,32 @@ function tekenRat(x, y, k, bukt, fase, grootte = 1) {
   ctx.fillStyle = k.buik;
   ctx.beginPath(); ctx.ellipse(5, -11 * plat + wieg, 16, 7 * plat, 0, 0, Math.PI * 2); ctx.fill();
   if (k.straling) tekenStralingsteken(-4, -20 * plat + wieg, bukt ? 6 : 9);
+  if (k.wcpapier) {
+    // ingepakt in wc-papier, met een lange sliert die achter hem aan wappert
+    ctx.strokeStyle = 'rgba(150,150,150,0.55)'; ctx.lineWidth = 1.5;
+    for (let i = -2; i <= 2; i++) {
+      ctx.beginPath(); ctx.moveTo(i * 10 - 6, -32 * plat + wieg); ctx.lineTo(i * 10 + 6, -4 * plat + wieg); ctx.stroke();
+    }
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(-20, -24 * plat + wieg);
+    for (let i = 0; i <= 6; i++) ctx.lineTo(-20 - i * 9, -24 * plat - 6 + Math.sin(tijd * 9 + i * 0.9) * 5 - i * 1.5);
+    for (let i = 6; i >= 0; i--) ctx.lineTo(-20 - i * 9, -24 * plat + 4 + Math.sin(tijd * 9 + i * 0.9) * 5 - i * 1.5);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#cfcfcf'; ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
+    for (let i = 1; i <= 6; i += 2) { const sx = -20 - i * 9; ctx.beginPath(); ctx.moveTo(sx, -24 * plat - 7 + Math.sin(tijd * 9 + i * 0.9) * 5 - i * 1.5); ctx.lineTo(sx, -24 * plat + 5 + Math.sin(tijd * 9 + i * 0.9) * 5 - i * 1.5); ctx.stroke(); }
+    ctx.setLineDash([]);
+  }
+  if (k.slijm) {
+    // glimmend groen slijm dat van hem af druipt
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath(); ctx.ellipse(-8, -26 * plat + wieg, 10, 4 * plat, -0.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#8fe04a';
+    [[-14, 0.0], [2, 0.4], [14, 0.75]].forEach(([dx, fase]) => {
+      const t = (tijd * 1.2 + fase) % 1;
+      ctx.beginPath(); ctx.ellipse(dx, -6 * plat + t * 10, 2.5, 3.5 + t * 2, 0, 0, Math.PI * 2); ctx.fill();
+    });
+  }
 
   // kop
   const ky = (bukt ? -10 : -24) + wieg;
@@ -1863,7 +1891,7 @@ function tekenMenu() {
       tekenRat(x, G - 8, { vacht: '#140a03', buik: '#140a03', roze: '#140a03' }, false, 0, grootte);
       ctx.globalAlpha = 1;
       tekst('🔒', x + 5 * grootte, G - 35 * grootte, 24);
-      tekst(ratLevel(k) === 1 ? k.nodig + ' punten' : k.nodig + ' in level ' + ratLevel(k), x + 10 * grootte, G + 28, 14, '#ffd27a', 'center', false);
+      tekst(ratLevel(k) === 1 ? k.nodig + ' punten' : k.nodig + ' in level ' + ratLevel(k), x + 10 * grootte, G + 28, Math.min(14, vak / 7.5), '#ffd27a', 'center', false);
     }
   });
   tekst(hoogsteSlide() > 1 ? 'Veeg opzij voor een ander level  ·  tik op je ratje om te starten' : 'Tik = springen  ·  2x tikken = hoger  ·  veeg omlaag = bukken', W / 2, H - 12, 14, '#e8cfa0', 'center', false);
