@@ -17,7 +17,7 @@
 <canvas id="spel"></canvas>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 7
+//  KAAS ROYALE - versie 8
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -45,7 +45,8 @@ const INSTELLINGEN = {
   kleinGatKans: 0.15,      // kans op een klein gat waar je overheen springt
   boomstamKans: 0.12,      // kans op een boomstam (alleen met 2x springen eroverheen)
   hoogteVerschil: 45,      // hoe hoog een opstapje in de vloer is
-  voetElke: 14,            // om de hoeveel seconden de grote voet komt
+  voetElke: 14,            // om de hoeveel seconden de grote voet of de clown komt
+  clownKans: 0.5,          // kans dat de clown komt in plaats van de voet (0 tot 1)
   voetDuur: 8,             // hoeveel seconden de voet achter je aan zit
 };
 
@@ -377,10 +378,21 @@ function startLevel2() {
 // ----- De grote voet -----
 const VOET_B = 120;   // hoe lang de schoen is
 function voetRust() { return rat.x - 60 - VOET_B; }
+function toeter() {   // de toeter van de clown: toet-toet!
+  piep(420, 0.12, 'square', 0.07, 360);
+  piep(420, 0.16, 'square', 0.07, 340, 0.17);
+}
 function startVoet() {
-  voet = { actief: true, tijd: INSTELLINGEN.voetDuur, x: -VOET_B - 80, fase: 'komt', t: 0, volgende: 1.6, nummer: ++voetenGezien };
-  deeltjes.push({ x: W / 2, y: 120, vy: 0, leven: 1.6, tekst: 'DE VOET KOMT! 🦶', groot: true });
-  piep(90, 0.5, 'sawtooth', 0.08, 60);
+  // soms de grote voet, soms de clown met zijn rode ballon
+  const soort = Math.random() < INSTELLINGEN.clownKans ? 'clown' : 'voet';
+  voet = { actief: true, soort, tijd: INSTELLINGEN.voetDuur, x: -VOET_B - 80, fase: 'komt', t: 0, volgende: 1.6, nummer: ++voetenGezien };
+  if (soort === 'clown') {
+    deeltjes.push({ x: W / 2, y: 120, vy: 0, leven: 1.6, tekst: 'DE CLOWN KOMT! 🎈', groot: true });
+    toeter();
+  } else {
+    deeltjes.push({ x: W / 2, y: 120, vy: 0, leven: 1.6, tekst: 'DE VOET KOMT! 🦶', groot: true });
+    piep(90, 0.5, 'sawtooth', 0.08, 60);
+  }
 }
 // De voet trapt alleen als er verder niets aankomt, anders is het niet eerlijk
 function ietsDichtbij() {
@@ -414,7 +426,7 @@ function voetBijwerken(dt) {
     }
   } else if (voet.fase === 'aanloop') {
     voet.x = rust - 50 * Math.min(1, voet.t / 0.45);
-    if (voet.t >= 0.5) { voet.fase = 'trap'; voet.t = 0; piep(200, 0.2, 'sawtooth', 0.06, 90); }
+    if (voet.t >= 0.5) { voet.fase = 'trap'; voet.t = 0; if (voet.soort === 'clown') toeter(); else piep(200, 0.2, 'sawtooth', 0.06, 90); }
   } else if (voet.fase === 'trap') {
     // snel uithalen en meteen weer terug, zodat je ook kunt ontwijken als je meteen springt
     const doel = rat.x + 50 - VOET_B;
@@ -436,11 +448,17 @@ function voetBijwerken(dt) {
   }
 
   // stampen tijdens het lopen
-  voet.til = (voet.fase === 'komt' || voet.fase === 'loopt') ? Math.abs(Math.sin(tijd * 5)) * 26 : 0;
-  if (oudeTil > 4 && voet.til <= 4) { schudden = Math.max(schudden, 0.08); piep(70, 0.15, 'sine', 0.12); }
+  const loopt = voet.fase === 'komt' || voet.fase === 'loopt';
+  if (voet.soort === 'clown') {
+    voet.til = loopt ? Math.abs(Math.sin(tijd * 9)) * 7 : 0;   // de clown huppelt
+  } else {
+    voet.til = loopt ? Math.abs(Math.sin(tijd * 5)) * 26 : 0;
+    if (oudeTil > 4 && voet.til <= 4) { schudden = Math.max(schudden, 0.08); piep(70, 0.15, 'sine', 0.12); }
+  }
 }
 function voetVak() {
   const y = vloerY(rat.x);
+  if (voet.soort === 'clown') return { l: voet.x + VOET_B - 64, r: voet.x + VOET_B - 4, b: y - 26, o: y };   // alleen zijn grote schoen
   return { l: voet.x + 10, r: voet.x + VOET_B - 4, b: y - 30, o: y };
 }
 
@@ -593,7 +611,7 @@ function bijwerken(dt) {
   if (voet.actief && voet.fase === 'trap' && raakt(ratVak(rat, ratBukt()), voetVak())) {
     if (rat.boost > 0) {
       if (!voet.geraakt) { voet.geraakt = true; deeltjes.push({ x: rat.x, y: rat.y - 60, vy: -60, leven: 0.7, tekst: 'HAHA! 🌈', goud: true }); }
-    } else if (rat.onkwetsbaar <= 0) { af('voet'); return; }
+    } else if (rat.onkwetsbaar <= 0) { af(voet.soort); return; }
   }
   if (voet.fase !== 'trap') voet.geraakt = false;
   dingen = dingen.filter(o => o.x + o.w > -80);
@@ -672,6 +690,7 @@ function af(soort) {
     muur: 'Bonk! Tegen een opstapje.',
     stam: 'Boink! Tegen de boomstam.',
     voet: 'Pats! Getrapt door de grote voet.',
+    clown: 'Toet! Getrapt door de clown.',
   }[soort];
   piep(220, 0.45, 'sawtooth', 0.08, 55);
   vrijgespeeld = RATJES.filter(k => k.nodig > record && k.nodig <= score);
@@ -1193,8 +1212,89 @@ function tekenGat(g) {
   }
 }
 
+function tekenClown() {
+  const y = vloerY(rat.x) - (voet.til || 0);
+  const bx = Math.min(voet.x, voetRust());          // waar zijn lijf staat
+  const neus = voet.x + VOET_B;                      // de punt van zijn grote schoen
+  const wiebel = Math.sin(tijd * 9) * 3;
+
+  // de rode ballon aan een touwtje
+  const ballonX = bx + 92 + Math.sin(tijd * 1.7) * 6, ballonY = y - 190 + Math.sin(tijd * 2.3) * 5;
+  ctx.strokeStyle = '#eee'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(bx + 78, y - 86); ctx.quadraticCurveTo(bx + 95, y - 130, ballonX, ballonY + 24); ctx.stroke();
+  ctx.fillStyle = '#e8141e';
+  ctx.beginPath(); ctx.ellipse(ballonX, ballonY, 19, 23, 0.1, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(ballonX - 4, ballonY + 26); ctx.lineTo(ballonX + 4, ballonY + 26); ctx.lineTo(ballonX, ballonY + 21); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.beginPath(); ctx.ellipse(ballonX - 7, ballonY - 8, 5, 8, 0.4, 0, Math.PI * 2); ctx.fill();
+
+  // achterste schoen
+  ctx.fillStyle = '#d61f1f';
+  ctx.beginPath(); ctx.ellipse(bx + 30 - wiebel, y - 9, 26, 9, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ffd23f'; ctx.fillRect(bx + 6 - wiebel, y - 3, 48, 3);
+
+  // voorste been: een rekbaar gestreept been naar de grote schoen
+  const heup = { x: bx + 52, y: y - 34 }, hiel = { x: neus - 58, y: y - 12 };
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#2f7de0'; ctx.lineWidth = 12;
+  ctx.beginPath(); ctx.moveTo(heup.x, heup.y); ctx.lineTo(hiel.x, hiel.y); ctx.stroke();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 12; ctx.setLineDash([5, 7]);
+  ctx.beginPath(); ctx.moveTo(heup.x, heup.y); ctx.lineTo(hiel.x, hiel.y); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // de grote clownsschoen
+  ctx.fillStyle = '#d61f1f';
+  ctx.beginPath(); ctx.ellipse(neus - 32, y - 10, 32, 10, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(neus - 13, y - 15, 12, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ffd23f'; ctx.fillRect(neus - 62, y - 3, 60, 3);
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.beginPath(); ctx.arc(neus - 16, y - 19, 4, 0, Math.PI * 2); ctx.fill();
+
+  // broek met stippen
+  ctx.fillStyle = '#2f7de0';
+  ctx.fillRect(bx + 14, y - 78, 56, 50);
+  ctx.fillStyle = '#ffd23f';
+  [[24, -68], [48, -60], [36, -44], [60, -40], [22, -38]].forEach(([dx, dy]) => { ctx.beginPath(); ctx.arc(bx + dx, y + dy, 4, 0, Math.PI * 2); ctx.fill(); });
+  // gele bloes
+  ctx.fillStyle = '#ffcf26';
+  ctx.beginPath(); ctx.ellipse(bx + 42, y - 92, 28, 22, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#e8141e';
+  [-100, -90, -80].forEach(dy => { ctx.beginPath(); ctx.arc(bx + 44, y + dy, 3, 0, Math.PI * 2); ctx.fill(); });
+  // arm met handschoen die de ballon vasthoudt
+  ctx.strokeStyle = '#ffcf26'; ctx.lineWidth = 9;
+  ctx.beginPath(); ctx.moveTo(bx + 62, y - 100); ctx.lineTo(bx + 76, y - 88); ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(bx + 78, y - 86, 6, 0, Math.PI * 2); ctx.fill();
+  // kraag
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  for (let i = 0; i <= 8; i++) ctx.lineTo(bx + 20 + i * 5.5, y - 112 + (i % 2) * 7);
+  ctx.lineTo(bx + 64, y - 106); ctx.lineTo(bx + 20, y - 106); ctx.closePath(); ctx.fill();
+
+  // hoofd
+  const hx = bx + 44, hy = y - 132;
+  ctx.fillStyle = '#ff7a1a';   // oranje haar
+  [[-18, -6], [-21, 6], [18, -6], [21, 6]].forEach(([dx, dy]) => { ctx.beginPath(); ctx.arc(hx + dx, hy + dy, 10, 0, Math.PI * 2); ctx.fill(); });
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(hx, hy, 19, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#1f6fd6';   // klein hoedje
+  ctx.beginPath(); ctx.moveTo(hx - 9, hy - 16); ctx.lineTo(hx + 9, hy - 16); ctx.lineTo(hx + 2, hy - 38); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.arc(hx + 2, hy - 39, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#111';      // ogen kijken naar het ratje
+  ctx.beginPath(); ctx.arc(hx + 2, hy - 5, 2.6, 0, Math.PI * 2); ctx.arc(hx + 11, hy - 5, 2.6, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#2b62c4'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(hx + 2, hy - 12); ctx.lineTo(hx + 2, hy - 2); ctx.moveTo(hx + 11, hy - 12); ctx.lineTo(hx + 11, hy - 2); ctx.stroke();
+  ctx.strokeStyle = '#e8141e'; ctx.lineWidth = 3;   // grote lach
+  ctx.beginPath(); ctx.arc(hx + 4, hy + 2, 10, 0.2, Math.PI - 0.4); ctx.stroke();
+  ctx.fillStyle = '#e8141e';   // rode neus
+  ctx.beginPath(); ctx.arc(hx + 16, hy + 1, 6, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.beginPath(); ctx.arc(hx + 14, hy - 1, 1.8, 0, Math.PI * 2); ctx.fill();
+}
+
 function tekenVoet() {
   if (!voet.actief) return;
+  if (voet.soort === 'clown') { tekenClown(); tekenTrapWaarschuwing(); return; }
   const vloerOnder = vloerY(rat.x), x = voet.x, til = voet.til || 0;
   const zool = vloerOnder - til;
   // been (spijkerbroek) van boven het scherm
@@ -1218,6 +1318,9 @@ function tekenVoet() {
   ctx.fillRect(x + 4, zool - 9, VOET_B - 2, 9);
   ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
   for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(x + 62 + i * 9, zool - 38 + i * 3); ctx.lineTo(x + 70 + i * 9, zool - 30 + i * 3); ctx.stroke(); }
+  tekenTrapWaarschuwing();
+}
+function tekenTrapWaarschuwing() {
   // waarschuwing vlak voor een trap
   if (voet.fase === 'aanloop' && Math.floor(tijd * 10) % 2) {
     tekst(voet.nummer <= 1 ? '! SPRING !' : '!', rat.x + 10, rat.y - 70, 30, '#ff4d4d');
@@ -1284,7 +1387,7 @@ function tekenScore() {
   if (put) tekst('Nog ' + Math.max(0, Math.ceil((put.x - rat.x) / 40)) + ' m tot de put', W - 18, 54, 16, '#9dff6a', 'right');
   else if (level === 1) tekst('Put bij ' + INSTELLINGEN.levelPunten + ' 🧀', W - 18, 54, 15, '#9dff6a', 'right', false);
   tekst('Record ' + record, W - 18, 30, 18, '#ffd27a', 'right', false);
-  if (voet.actief && voet.tijd > 0) tekst('🦶 ' + Math.ceil(voet.tijd), 18, 62, 20, '#ff9a7a', 'left');
+  if (voet.actief && voet.tijd > 0) tekst((voet.soort === 'clown' ? '🤡 ' : '🦶 ') + Math.ceil(voet.tijd), 18, 62, 20, '#ff9a7a', 'left');
   if (rat.boost > 0) {
     // balk die laat zien hoe lang de superkracht nog duurt
     const bw = 200, bx = W / 2 - bw / 2, by = 66;
