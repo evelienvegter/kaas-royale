@@ -21,7 +21,7 @@
 <canvas id="spel"></canvas>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 17
+//  KAAS ROYALE - versie 18
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -69,7 +69,7 @@ const RATJES = [
 
 // ----- Het lekkers in de schatkamer -----
 const LEKKERS = ['🧀', '🍰', '🍪', '🍩', '🍓', '🧁', '🍫', '🥐', '🍕'];
-const KEUKEN_LEKKERS = ['🧀', '🥐', '🥖', '🍅', '🍓', '🧁', '🍰', '🍕'];   // level 3; de gouden bonus is een pan ratatouille 🍲
+const KEUKEN_LEKKERS = ['🍗', '🍔', '🧀', '🥐', '🥖', '🍅', '🌭', '🍕', '🧁', '🍗', '🍔'];   // level 3; de gouden bonus is een pan ratatouille 🍲
 const SUPERSNOEPJE = '🍭';
 
 // =====================================================================
@@ -110,7 +110,7 @@ let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
 const ratLevel = k => k.level || 1;
 const recordVan = n => n === 3 ? record3 : n === 2 ? record2 : record;
 const ratOpen = k => recordVan(ratLevel(k)) >= k.nodig;
-const VERSIE = 17;
+const VERSIE = 18;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
 let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= INSTELLINGEN.levelPunten;
 let level3Open = localStorage.getItem('kaasRoyaleLevel3') === '1' || record2 >= INSTELLINGEN.levelPunten;
@@ -351,11 +351,11 @@ const NIEUW_X = () => W + 120;   // nieuwe dingen beginnen hier, net buiten beel
 
 function maakObstakel(soort) {
   const x = NIEUW_X();
-  if (!soort) soort = kies(['val', 'val', 'kist', 'kist', 'luchter']);
+  if (!soort) soort = kies(level === 3 ? ['val', 'kist', 'borden', 'borden', 'luchter'] : ['val', 'val', 'kist', 'kist', 'luchter']);
   let o;
-  if (soort === 'val') o = { soort, x, w: 52, h: 22 };
+  if (soort === 'val') o = level === 2 ? { soort, x, w: 44, h: 24 } : { soort, x, w: 52, h: 22 };   // de drol is iets smaller
   else if (soort === 'kist') o = { soort, x, w: 46, h: 40 };
-  if (soort === 'val' && level === 2) o = { soort, x, w: 44, h: 24 };   // de drol is iets smaller
+  else if (soort === 'borden') o = { soort, x, w: 50, h: 30 };   // een stapel borden (keuken)
   else if (soort === 'luchter') o = { soort, x, w: 62, h: 0, nummer: ++luchtersGezien };
   else o = { soort: 'stam', x, w: 108, h: 108, r: 54, nummer: ++stammenGezien };
   o.v = maakVlak(W + 5, x + o.w + 240);   // vlak tot een stuk na het obstakel, zodat je eerst kunt landen
@@ -781,6 +781,7 @@ function af(soort) {
       luchter: 'Bonk! Tegen de koekenpan.',
       stam: 'Klonk! Tegen de soeppan.',
       gat: 'Au, heet! Op het gasfornuis.',
+      borden: 'Kletter! Tegen de stapel borden.',
     },
   }[level] || {})[soort] || {
     val: 'Klap! In de muizenval.',
@@ -884,7 +885,7 @@ function tekenSchatkamer() {
 function tekenVloer() {
   // Vloer, in stukken met verschillende hoogtes
   // schatkamer: hout en goud; riool: beton en slijm; keuken: een stalen aanrecht
-  const [kleurVloer, kleurRand, kleurNaad] = [null, ['#3b2410', '#d4a017', '#2c1a0b'], ['#3d4540', '#7fd13b', '#2a302c'], ['#565d65', '#d5dde3', '#454b52']][level];
+  const [kleurVloer, kleurRand, kleurNaad] = [null, ['#3b2410', '#d4a017', '#2c1a0b'], ['#3d4540', '#7fd13b', '#2a302c'], ['#9a6438', '#e8bf84', '#7a4c28']][level];
   const stukken = toestand === 'menu' ? [{ x: -10, w: W + 20, h: 0 }] : vloer;
   const t = scrollX % 64;
   for (const st of stukken) {
@@ -956,67 +957,95 @@ function tekenRiool() {
 }
 
 function tekenKeuken() {
-  // een donkere keuken bij nacht, met maanlicht
+  // een warme restaurantkeuken, zoals in Ratatouille
   const lucht = ctx.createLinearGradient(0, 0, 0, G);
-  lucht.addColorStop(0, '#12161d');
-  lucht.addColorStop(1, '#262d38');
+  lucht.addColorStop(0, '#2b1a12');
+  lucht.addColorStop(1, '#4a2c1a');
   ctx.fillStyle = lucht;
   ctx.fillRect(0, 0, W, G);
 
-  // tegeltjes aan de muur (bewegen langzaam)
-  const p = scrollX * 0.3, tegel = 34;
-  ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2;
-  for (let y = 90; y < G; y += tegel) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-  for (let x = -(p % tegel); x < W; x += tegel) { ctx.beginPath(); ctx.moveTo(x, 90); ctx.lineTo(x, G); ctx.stroke(); }
-  ctx.fillStyle = 'rgba(255,255,255,0.03)';
-  ctx.fillRect(0, 90, W, G - 90);
+  // tegeltjes achter het aanrecht: turquoise en crème (bewegen langzaam)
+  const p = scrollX * 0.3, tegel = 30, tegelTop = 196;
+  for (let y = tegelTop, r = 0; y < G; y += tegel, r++) {
+    for (let x = -(p % (tegel * 2)) - tegel * 2, c = 0; x < W; x += tegel, c++) {
+      ctx.fillStyle = (r + c) % 2 ? 'rgba(47,140,146,0.55)' : 'rgba(225,208,170,0.35)';
+      ctx.fillRect(x + 1, y + 1, tegel - 2, tegel - 2);
+    }
+  }
 
-  // ramen met de maan en een rek met pannen
-  const q = scrollX * 0.4, tussen = 520;
+  // planken met potjes en eten, en een rek met koperen pannen
+  const q = scrollX * 0.42, tussen = 560;
   for (let i = Math.floor(q / tussen) - 1; i * tussen - q < W + tussen; i++) {
     const x = i * tussen - q;
-    // raam
-    ctx.fillStyle = '#0b1530'; ctx.fillRect(x + 40, 20, 120, 110);
-    ctx.fillStyle = '#f4f0d0';
-    ctx.beginPath(); ctx.arc(x + 120, 55, 16, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#0b1530';
-    ctx.beginPath(); ctx.arc(x + 112, 50, 14, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#3a3226'; ctx.lineWidth = 6;
-    ctx.strokeRect(x + 40, 20, 120, 110);
-    ctx.beginPath(); ctx.moveTo(x + 100, 20); ctx.lineTo(x + 100, 130); ctx.moveTo(x + 40, 75); ctx.lineTo(x + 160, 75); ctx.stroke();
-    const licht = ctx.createLinearGradient(0, 130, 0, G);
-    licht.addColorStop(0, 'rgba(170,190,255,0.12)');
-    licht.addColorStop(1, 'rgba(170,190,255,0)');
-    ctx.fillStyle = licht;
-    ctx.beginPath(); ctx.moveTo(x + 40, 130); ctx.lineTo(x + 160, 130); ctx.lineTo(x + 230, G); ctx.lineTo(x + 70, G); ctx.closePath(); ctx.fill();
-    // rek met pannen en een pollepel
-    ctx.fillStyle = '#6b7178'; ctx.fillRect(x + 250, 40, 200, 6);
-    [[280, 26], [340, 34], [410, 22]].forEach(([px, r], j) => {
+    // warme lamp
+    const lamp = ctx.createRadialGradient(x + 280, 30, 4, x + 280, 30, 170);
+    lamp.addColorStop(0, 'rgba(255,200,110,0.32)');
+    lamp.addColorStop(1, 'rgba(255,200,110,0)');
+    ctx.fillStyle = lamp; ctx.fillRect(x + 110, 0, 340, 200);
+    ctx.fillStyle = '#1e1410'; ctx.fillRect(x + 278, 0, 4, 18);
+    ctx.fillStyle = '#c8392b';
+    ctx.beginPath(); ctx.moveTo(x + 262, 32); ctx.lineTo(x + 298, 32); ctx.lineTo(x + 288, 16); ctx.lineTo(x + 272, 16); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#ffe6a0'; ctx.beginPath(); ctx.arc(x + 280, 34, 5, 0, Math.PI * 2); ctx.fill();
+
+    // plank met potjes en eten
+    ctx.fillStyle = '#7a4a26'; ctx.fillRect(x + 10, 128, 220, 10);
+    ctx.fillStyle = '#5c361b'; ctx.fillRect(x + 10, 136, 220, 4);
+    [['#e2483c', 0], ['#f2b632', 1], ['#5fae4b', 2]].forEach(([deksel, j]) => {
+      const px = x + 22 + j * 34;
+      ctx.fillStyle = 'rgba(230,240,255,0.35)'; ctx.fillRect(px, 100, 26, 28);
+      ctx.fillStyle = deksel; ctx.fillRect(px - 2, 95, 30, 7);
+      ctx.fillStyle = ['#f08a3c', '#c84a2a', '#e8d35a'][j]; ctx.fillRect(px + 3, 110, 20, 16);
+    });
+    ctx.font = '26px ' + EMOJI; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ['🍗', '🍔', '🥖'].forEach((e, j) => ctx.fillText(e, x + 140 + j * 30, 129));
+
+    // slingers knoflook en rode pepers
+    ctx.strokeStyle = '#a07a4a'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x + 250, 60); ctx.lineTo(x + 250, 170); ctx.stroke();
+    for (let k = 0; k < 5; k++) {
+      ctx.fillStyle = k % 2 ? '#f1ead8' : '#d73a2a';
+      ctx.beginPath(); ctx.ellipse(x + 250 + (k % 2 ? 6 : -6), 76 + k * 20, k % 2 ? 9 : 5, k % 2 ? 9 : 11, 0, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // rek met koperen pannen en een pollepel
+    ctx.fillStyle = '#3a2a20'; ctx.fillRect(x + 330, 46, 200, 6);
+    [[360, 22, '#c27a3e'], [420, 30, '#b8692f'], [490, 20, '#d48a4a']].forEach(([px, r, kleur], j) => {
       const zwaai = Math.sin(tijd * 1.5 + i + j) * 0.06;
-      ctx.save(); ctx.translate(x + px, 46); ctx.rotate(zwaai);
-      ctx.strokeStyle = '#2b2f34'; ctx.lineWidth = 6;
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 30); ctx.stroke();
-      ctx.fillStyle = j === 1 ? '#b8743a' : '#3a3f45';
-      ctx.beginPath(); ctx.arc(0, 30 + r, r, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.08)';
-      ctx.beginPath(); ctx.arc(-r * 0.3, 30 + r * 0.7, r * 0.4, 0, Math.PI * 2); ctx.fill();
+      ctx.save(); ctx.translate(x + px, 52); ctx.rotate(zwaai);
+      ctx.strokeStyle = '#2b1d14'; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 26); ctx.stroke();
+      ctx.fillStyle = kleur;
+      ctx.beginPath(); ctx.arc(0, 26 + r, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,230,190,0.35)';
+      ctx.beginPath(); ctx.arc(-r * 0.35, 26 + r * 0.65, r * 0.38, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     });
   }
-  // een fornuis met een dampende pan (dichterbij)
-  const r = scrollX * 0.6, tussen2 = 640;
+
+  // een rood fornuis met een dampende koperen pan, en een schaal eten (dichterbij)
+  const r = scrollX * 0.6, tussen2 = 600;
   for (let i = Math.floor(r / tussen2) - 1; i * tussen2 - r < W + tussen2; i++) {
     const x = i * tussen2 - r + hash(i) * 120, y = G - 70;
-    ctx.fillStyle = '#2a2f36'; ctx.fillRect(x, y, 150, 70);
-    ctx.fillStyle = '#ff7a2a';
-    ctx.fillRect(x + 20, y + 30, 110, 4);
-    ctx.fillStyle = '#4a4f57'; ctx.fillRect(x + 35, y - 40, 80, 40);
-    ctx.fillStyle = '#5c626b'; ctx.fillRect(x + 30, y - 44, 90, 8);
+    ctx.fillStyle = '#a8261c'; ctx.fillRect(x, y, 160, 70);
+    ctx.fillStyle = '#c8392b'; ctx.fillRect(x, y, 160, 10);
+    ctx.fillStyle = '#d9b25a'; ctx.fillRect(x + 20, y + 26, 120, 4);
+    ctx.fillStyle = '#2a1a14'; ctx.fillRect(x + 30, y + 36, 100, 26);
+    ctx.fillStyle = '#ff9a3c'; ctx.fillRect(x + 36, y + 42, 88, 14);
+    ctx.fillStyle = '#c27a3e'; ctx.fillRect(x + 40, y - 38, 80, 38);
+    ctx.fillStyle = '#e09a5a'; ctx.fillRect(x + 34, y - 42, 92, 8);
     for (let k = 0; k < 3; k++) {
       const t = (tijd * 0.6 + k / 3) % 1;
-      ctx.fillStyle = 'rgba(220,230,240,' + (0.25 * (1 - t)) + ')';
-      ctx.beginPath(); ctx.arc(x + 60 + k * 15 + Math.sin(t * 6 + k) * 8, y - 50 - t * 90, 10 + t * 14, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(240,235,230,' + (0.3 * (1 - t)) + ')';
+      ctx.beginPath(); ctx.arc(x + 62 + k * 15 + Math.sin(t * 6 + k) * 8, y - 48 - t * 90, 10 + t * 14, 0, Math.PI * 2); ctx.fill();
     }
+    // een schaal met kippenbouten en hamburgers
+    const sx = x + 300;
+    ctx.fillStyle = '#f4f1ea';
+    ctx.beginPath(); ctx.ellipse(sx, G - 6, 52, 9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2f7de0';
+    ctx.beginPath(); ctx.ellipse(sx, G - 6, 52, 9, 0, 0, Math.PI * 2); ctx.lineWidth = 3; ctx.strokeStyle = '#2f7de0'; ctx.stroke();
+    ctx.font = '30px ' + EMOJI; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText('🍗', sx - 26, G - 6); ctx.fillText('🍔', sx + 4, G - 8); ctx.fillText('🍗', sx + 30, G - 6);
   }
 }
 
@@ -1256,19 +1285,27 @@ function tekenKeukenObstakel(o) {
       ctx.beginPath(); ctx.moveTo(o.x + dx - 3, v - 10); ctx.lineTo(o.x + dx - 3, v - 10 - h); ctx.lineTo(o.x + dx + 4, v - 10 - h + 8); ctx.lineTo(o.x + dx + 4, v - 10); ctx.closePath(); ctx.fill();
       ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(o.x + dx - 2, v - 10 - h + 4, 1.5, h - 6);
     });
+  } else if (o.soort === 'borden') {
+    // een scheve stapel borden met een blauw randje
+    for (let i = 0; i < 5; i++) {
+      const by = v - 4 - i * 5.5, schuif = Math.sin(i * 2.3) * 3;
+      ctx.fillStyle = '#f6f3ec';
+      ctx.beginPath(); ctx.ellipse(o.x + o.w / 2 + schuif, by, o.w / 2, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#2f7de0'; ctx.lineWidth = 1.5; ctx.stroke();
+    }
   } else if (o.soort === 'stam') {
     // een grote ronde soeppan met damp
     const cx = o.x + o.r, cy = v - o.r;
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.beginPath(); ctx.ellipse(cx, v + 2, o.r, 6, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#3c4148';
+    ctx.fillStyle = '#b8261c';   // een rode gietijzeren pan
     ctx.beginPath(); ctx.arc(cx, cy + 6, o.r - 2, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#545a62';
+    ctx.fillStyle = '#e04a36';
     ctx.beginPath(); ctx.arc(cx - 12, cy - 6, o.r - 22, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#2b2f34';   // handvatten en rand
+    ctx.fillStyle = '#2b1d14';   // handvatten en rand
     ctx.fillRect(cx - o.r - 8, cy - 14, 14, 8); ctx.fillRect(cx + o.r - 6, cy - 14, 14, 8);
-    ctx.fillStyle = '#6b727a'; ctx.fillRect(cx - o.r + 4, cy - o.r + 6, (o.r - 4) * 2, 10);
-    ctx.fillStyle = '#d2552a';   // rode soep die bijna overkookt
+    ctx.fillStyle = '#7a1a12'; ctx.fillRect(cx - o.r + 4, cy - o.r + 6, (o.r - 4) * 2, 10);
+    ctx.fillStyle = '#f08a3c';   // oranje soep die bijna overkookt
     ctx.beginPath(); ctx.ellipse(cx, cy - o.r + 8, o.r - 8, 6, 0, 0, Math.PI * 2); ctx.fill();
     for (let k = 0; k < 3; k++) {
       const t = (tijd * 0.8 + k / 3) % 1;
@@ -1288,9 +1325,9 @@ function tekenKeukenObstakel(o) {
     ctx.strokeStyle = '#8a9096'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, onder - 70); ctx.stroke();
     ctx.fillStyle = '#2b2f34'; ctx.fillRect(cx - 4, onder - 72, 8, 36);   // steel
-    ctx.fillStyle = '#33383f';
+    ctx.fillStyle = '#b8692f';
     ctx.beginPath(); ctx.ellipse(cx, onder - 18, o.w / 2, 20, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#4b5159';
+    ctx.fillStyle = '#d98a4a';
     ctx.beginPath(); ctx.ellipse(cx - 5, onder - 22, o.w / 2 - 10, 13, 0, 0, Math.PI * 2); ctx.fill();
     if (o.nummer <= 3) {
       ctx.globalAlpha = 0.6 + Math.sin(tijd * 10) * 0.4;
@@ -1471,10 +1508,10 @@ function tekenGat(g) {
     ctx.beginPath(); ctx.moveTo(g.x, by - 22); ctx.lineTo(g.x + g.w, by - 22); ctx.stroke();
     for (let x = g.x + 30; x < g.x + g.w; x += 60) { ctx.beginPath(); ctx.moveTo(x, by - 22); ctx.lineTo(x, by); ctx.stroke(); }
   }
-  ctx.fillStyle = riool ? '#2a302c' : keuken ? '#454b52' : '#5a3816';
+  ctx.fillStyle = riool ? '#2a302c' : keuken ? '#7a4c28' : '#5a3816';
   ctx.fillRect(g.x - 4, v, 4, H - v);
   ctx.fillRect(g.x + g.w, v, 4, H - v);
-  ctx.fillStyle = riool ? '#7fd13b' : keuken ? '#d5dde3' : '#d4a017';
+  ctx.fillStyle = riool ? '#7fd13b' : keuken ? '#e8bf84' : '#d4a017';
   ctx.fillRect(g.x - 6, v, 6, 3);
   ctx.fillRect(g.x + g.w, v, 6, 3);
 

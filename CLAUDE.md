@@ -10,5 +10,6 @@ Evelien maakt dit spel samen met haar zoon van 12. Hij speelt graag Fortnite en 
   Een push naar `main` zet een nieuwe versie online; vraag eerst of dat mag.
 - Test na een wijziging: syntaxis en een korte simulatie zonder browser kan met JavaScriptCore
   (`/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc`) en een nep-canvas.
-  Controleer bij nieuwe obstakels of ze haalbaar zijn bij de begin- en de maximale snelheid.
+  Controleer bij nieuwe obstakels of ze haalbaar zijn bij de begin- en de maximale snelheid, en tel per level
+  welke obstakels er echt komen (een fout in `maakObstakel` maakte ooit van alles een boomstam).
 - Een nieuw obstakel moet eerlijk zijn: altijd te ontwijken, met een hint de eerste keren.
