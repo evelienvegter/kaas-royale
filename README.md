@@ -4,6 +4,8 @@ Een ratje rent door een schatkamer vol lekkers. Gemaakt voor de telefoon (houd h
 
 **Spelen:** https://evelienvegter.github.io/kaas-royale/
 
+![Uitleg](uitleg.png)
+
 ## Besturing
 
 - Tik: springen
