@@ -17,7 +17,7 @@
 <canvas id="spel"></canvas>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 9
+//  KAAS ROYALE - versie 10
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -48,6 +48,7 @@ const INSTELLINGEN = {
   voetElke: 14,            // om de hoeveel seconden de grote voet of de clown komt
   clownKans: 0.5,          // kans dat de clown komt in plaats van de voet in level 2 (0 tot 1)
   voetDuur: 8,             // hoeveel seconden de voet achter je aan zit
+  aftellen: 2,             // hoeveel seconden het spel aftelt voordat de voet trapt
 };
 
 // ----- De ratjes: bij genoeg punten (je record) speel je een nieuw ratje vrij -----
@@ -396,11 +397,12 @@ function startVoet() {
 }
 // De voet trapt alleen als er verder niets aankomt, anders is het niet eerlijk
 function ietsDichtbij() {
-  const van = rat.x - 60, tot = rat.x + 320;
+  // vrij tot na de trap: aftellen + aanloop, en nog even om te landen
+  const van = rat.x - 60, tot = rat.x + snelheid * (INSTELLINGEN.aftellen + 0.9) + 60;
   if (rat.vliegt || !rat.opGrond) return true;
   if (dingen.some(o => o.x < tot && o.x + o.w > van)) return true;
   if (gaten.some(g => (g.trampX === null ? g.x : g.trampX) < tot && g.x + g.w > van)) return true;
-  return vloer.some(s => s.x > van && s.x < tot);   // een opstapje
+  return vloer.some((s, i) => i > 0 && s.h !== vloer[i - 1].h && s.x > van && s.x < tot);   // een opstapje
 }
 function voetBijwerken(dt) {
   voetTimer -= dt;
@@ -421,9 +423,16 @@ function voetBijwerken(dt) {
     voet.volgende -= dt;
     if (voet.tijd <= 0) { voet.fase = 'gaat'; }
     else if (voet.volgende <= 0) {
-      if (ietsDichtbij()) voet.volgende = 0.25;
-      else { voet.fase = 'aanloop'; voet.t = 0; }
+      // even geen nieuwe obstakels, en wachten tot de weg vrij is; dan begint het aftellen
+      if (!voet.wacht) { voet.wacht = true; maakVlak(W + 5, rat.x + snelheid * (INSTELLINGEN.aftellen + 1.2) + 300); }
+      if (!ietsDichtbij()) { voet.fase = 'aftellen'; voet.t = 0; piep(660, 0.08, 'triangle', 0.06); }
     }
+  } else if (voet.fase === 'aftellen') {
+    voet.x = rust;
+    const tel = Math.ceil(INSTELLINGEN.aftellen - voet.t);
+    if (tel !== voet.tel) { voet.tel = tel; if (tel > 0 && voet.t > 0.05) piep(660, 0.08, 'triangle', 0.06); }
+    voet.wacht = false;
+    if (voet.t >= INSTELLINGEN.aftellen) { voet.fase = 'aanloop'; voet.t = 0; piep(990, 0.15, 'triangle', 0.08); }
   } else if (voet.fase === 'aanloop') {
     voet.x = rust - 50 * Math.min(1, voet.t / 0.45);
     if (voet.t >= 0.5) { voet.fase = 'trap'; voet.t = 0; if (voet.soort === 'clown') toeter(); else piep(200, 0.2, 'sawtooth', 0.06, 90); }
@@ -566,6 +575,8 @@ function bijwerken(dt) {
   // Nieuwe dingen maken
   tijdSindsGat += dt;
   if (level === 1 && !put && score >= INSTELLINGEN.levelPunten) maakPut();
+  // terwijl de voet aftelt en trapt komen er geen nieuwe obstakels
+  if (voet.actief && (voet.wacht || ['aftellen', 'aanloop', 'trap'].includes(voet.fase))) volgendObstakel = Math.max(volgendObstakel, 0.4);
   volgendObstakel -= dt;
   if (volgendObstakel <= 0) {
     volgendObstakel = willekeurig(0.95, 1.8);
@@ -1321,9 +1332,18 @@ function tekenVoet() {
   tekenTrapWaarschuwing();
 }
 function tekenTrapWaarschuwing() {
-  // waarschuwing vlak voor een trap
-  if (voet.fase === 'aanloop' && Math.floor(tijd * 10) % 2) {
-    tekst(voet.nummer <= 1 ? '! SPRING !' : '!', rat.x + 10, rat.y - 70, 30, '#ff4d4d');
+  // aftellen tot je moet springen: 2... 1... SPRING!
+  const x = rat.x + 10, y = rat.y - 82;
+  if (voet.fase === 'aftellen') {
+    const over = INSTELLINGEN.aftellen - voet.t;
+    tekst('Spring over ' + Math.ceil(over), x, y, 24, '#ffd23f');
+    // balkje dat leegloopt
+    const bw = 90;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(x - bw / 2, y + 18, bw, 8);
+    ctx.fillStyle = '#ffd23f'; ctx.fillRect(x - bw / 2, y + 18, bw * over / INSTELLINGEN.aftellen, 8);
+  } else if (voet.fase === 'aanloop') {
+    const groot = 30 + Math.sin(tijd * 30) * 3;
+    tekst('SPRING!', x, y, groot, '#ff4d4d');
   }
 }
 

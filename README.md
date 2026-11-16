@@ -20,7 +20,7 @@ Een ratje rent door een schatkamer vol lekkers. Gemaakt voor de telefoon (houd h
 - Boomstam: 2x springen
 - Kleine gaten: springen; grote gaten: via de trampoline
 - Opstapjes in de vloer: springen
-- De grote voet komt elke 14 seconden; in level 2 komt soms de clown met de rode ballon. Spring als je een rode ! ziet
+- De grote voet komt elke 14 seconden; in level 2 komt soms de clown met de rode ballon. Het spel telt af (2, 1, SPRING!): spring dan
 - Nieuwe ratjes vrijspelen bij 50, 150, 300 en 500 punten (Radio, de radioactieve rat)
 - Level 1 is de schatkamer. Bij 500 punten komt de put: daar val je in level 2, het riool
   (met poep, wc-papier, rioolbuizen en groen rioolwater in de gaten)
