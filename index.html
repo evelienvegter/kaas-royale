@@ -21,7 +21,7 @@
 <canvas id="spel"></canvas>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 19
+//  KAAS ROYALE - versie 20
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -112,14 +112,18 @@ let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
 const ratLevel = k => k.level || 1;
 const recordVan = n => n === 3 ? record3 : n === 2 ? record2 : record;
 const ratOpen = k => recordVan(ratLevel(k)) >= k.nodig;
-const VERSIE = 19;
+const VERSIE = 20;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
 let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= INSTELLINGEN.levelPunten;
 let level3Open = localStorage.getItem('kaasRoyaleLevel3') === '1' || record2 >= INSTELLINGEN.levelPunten;
 const hoogsteSlide = () => level3Open ? 3 : level2Open ? 2 : 1;
+// Vraag de browser om de opgeslagen punten en levels nooit zomaar op te ruimen
+if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 function openLevel(n) {
   if (n === 2 && !level2Open) { level2Open = true; localStorage.setItem('kaasRoyaleLevel2', '1'); }
   if (n === 3 && !level3Open) { level3Open = true; localStorage.setItem('kaasRoyaleLevel3', '1'); }
+  // de volgende keer begin je in het hoogste level dat je gehaald hebt
+  if (n > (Number(localStorage.getItem('kaasRoyaleStartLevel')) || 1)) { slide = n; localStorage.setItem('kaasRoyaleStartLevel', String(n)); }
 }
 // het beginscherm heeft een slide per level; level 2 komt erbij als je hem gehaald hebt
 let slide = Math.min(hoogsteSlide(), Number(localStorage.getItem('kaasRoyaleStartLevel')) || 1);
@@ -257,8 +261,10 @@ function tikBuitenSpel(x, y = H) {
       piep(180, 0.15, 'square', 0.05);
     }
   } else if (toestand === 'af' && afSinds > 0.7) {
+    // terug naar het beginscherm, op de slide van het level waar je net was
     toestand = 'menu';
-    level = slide;
+    slide = level;
+    localStorage.setItem('kaasRoyaleStartLevel', String(slide));
   }
 }
 
