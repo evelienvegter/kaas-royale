@@ -32,7 +32,7 @@ Een ratje rent door een schatkamer vol lekkers. Gemaakt voor de telefoon (houd h
 - Bij 500 punten in level 2 komt de pijp: daar schiet je omhoog naar level 3, de keuken (messen, peper en zout, koekenpannen,
   een soeppan, gasfornuizen, een spons als trampoline en de kat). In level 3 speel je Chef vrij bij 150 punten (koksmuts),
   Hotdog bij 400 en Aangebrand bij 600 (zwart, met rook)
-- Bij 800 punten in level 3 komt het muizenhol: daar ren je in naar level 4, de kapsalon (haar, tondeuses, stekkers, föhns,
+- Bij 600 punten in level 3 komt het muizenhol: daar ren je in naar level 4, de kapsalon (haar, tondeuses, stekkers, föhns,
   een krulspeld, wasbakken met shampoo, handdoeken als trampoline en de reuzenschaar). Je krijgt meteen Krul (met krullen);
   bij 200 punten Rapunzel (lang haar) en bij 400 Low Taper (blauwe low taper fade)
 
