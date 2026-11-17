@@ -36,7 +36,7 @@
 </div>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 28
+//  KAAS ROYALE - versie 29
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -145,7 +145,7 @@ let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
 const ratLevel = k => k.level || 1;
 const recordVan = n => n === 999 ? record999 : [0, record, record2, record3, record4][n];
 const ratOpen = k => recordVan(ratLevel(k)) >= k.nodig;
-const VERSIE = 28;
+const VERSIE = 29;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
 let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= UITGANG(1);
 let level3Open = localStorage.getItem('kaasRoyaleLevel3') === '1' || record2 >= UITGANG(2);
@@ -2667,6 +2667,24 @@ function tekenen() {
     }
   }
   if (W < 480) tekenDraaiTelefoon();
+}
+
+// ----- Automatisch bijwerken -----
+// Telefoons bewaren soms lang een oude versie. Bij het starten (en als je het spel weer opent)
+// kijken we of er online een nieuwere versie staat; zo ja, dan laden we die meteen.
+function zoekNieuweVersie() {
+  if (typeof fetch === 'undefined' || toestand === 'spelen') return;
+  fetch('index.html?controle=' + Date.now(), { cache: 'no-store' })
+    .then(r => r.text())
+    .then(html => {
+      const m = html.match(/const VERSIE = (\d+)/);
+      if (m && Number(m[1]) > VERSIE) location.replace(location.pathname + '?v=' + m[1]);
+    })
+    .catch(() => {});   // geen internet: gewoon verder spelen
+}
+zoekNieuweVersie();
+if (typeof document !== 'undefined' && document.addEventListener) {
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) zoekNieuweVersie(); });
 }
 
 // ----- De spellus -----
