@@ -21,7 +21,7 @@
 <canvas id="spel"></canvas>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 22
+//  KAAS ROYALE - versie 23
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -30,7 +30,7 @@
 // ----- Getallen om mee te spelen: verander ze en kijk wat er gebeurt! -----
 const INSTELLINGEN = {
   startSnelheid: 260,      // hoe snel het ratje begint (pixels per seconde)
-  versnelling: 5,          // hoeveel sneller het elke seconde gaat
+  versnelling: 0,          // hoeveel sneller het elke seconde gaat (0 = altijd dezelfde snelheid)
   maxSnelheid: 650,        // sneller dan dit wordt het niet
   springKracht: 640,       // hoe hoog je springt
   dubbelSprongKracht: 650, // hoe hoog de tweede sprong in de lucht is
@@ -44,6 +44,10 @@ const INSTELLINGEN = {
   snoepjeElke: 18,         // om de hoeveel seconden er ongeveer een superlolly komt
   boostDuur: 5,            // hoeveel seconden de superkracht duurt
   boostSnelheid: 1.5,      // hoeveel keer zo snel je gaat met superkracht
+  turboDuur: 3,            // hoe lang de boostknop je extra snel maakt (seconden)
+  turboWacht: 5,           // hoe lang je daarna moet wachten voor de volgende boost
+  turboSnelheid: 1.6,      // hoeveel keer zo snel je gaat met de boostknop
+  regenboogElke: 22,       // de Regenboog-rat krijgt vanzelf superkracht, om de zoveel seconden
   gatKans: 0.18,           // kans dat er een gat met trampoline komt (0 tot 1)
   gatLengte: 1.4,          // hoe lang het gat is (in seconden rennen)
   vliegZwaartekracht: 600, // lager = langer zweven na de trampoline
@@ -126,7 +130,7 @@ let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
 const ratLevel = k => k.level || 1;
 const recordVan = n => n === 999 ? record999 : [0, record, record2, record3, record4][n];
 const ratOpen = k => recordVan(ratLevel(k)) >= k.nodig;
-const VERSIE = 22;
+const VERSIE = 23;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
 let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= UITGANG(1);
 let level3Open = localStorage.getItem('kaasRoyaleLevel3') === '1' || record2 >= UITGANG(2);
@@ -160,7 +164,7 @@ let omlaagIngedrukt = false, vingerOmlaag = false;
 const RAT_X = 140;        // waar het ratje rent
 
 function nieuwSpel() {
-  rat = { x: RAT_X, y: G, vy: 0, opGrond: true, dubbel: false, vliegt: false, bukken: 0, fase: 0, boost: 0, onkwetsbaar: 0, coyote: 0 };
+  rat = { x: RAT_X, y: G, vy: 0, opGrond: true, dubbel: false, vliegt: false, bukken: 0, fase: 0, boost: 0, onkwetsbaar: 0, coyote: 0, turbo: 0, turboWacht: 0, regenboogKlok: INSTELLINGEN.regenboogElke };
   dingen = []; lekkers = []; deeltjes = []; gaten = [];
   snelheid = INSTELLINGEN.startSnelheid;
   afstand = 0; score = 0; springBuffer = 0; luchtersGezien = 0; gatenGezien = 0; tijdSindsGat = 0;
@@ -333,6 +337,7 @@ canvas.addEventListener('touchstart', e => {
   startAudio();
   const t = e.changedTouches[0];
   if (toestand !== 'spelen') { menuStart = { x: t.clientX / schaal, y: t.clientY / schaal }; veegStartY = null; return; }
+  if (opBoostKnop(t.clientX / schaal, t.clientY / schaal)) { turbo(); veegStartY = null; return; }   // de boostknop
   veegStartY = t.clientY; geveegd = false;
 }, { passive: false });
 canvas.addEventListener('touchmove', e => {
@@ -354,7 +359,9 @@ canvas.addEventListener('touchend', e => {
   veegStartY = null; vingerOmlaag = false;
 }, { passive: false });
 canvas.addEventListener('mousedown', e => {
-  if (toestand !== 'spelen') tikBuitenSpel(e.clientX / schaal, e.clientY / schaal); else springen();
+  if (toestand !== 'spelen') tikBuitenSpel(e.clientX / schaal, e.clientY / schaal);
+  else if (opBoostKnop(e.clientX / schaal, e.clientY / schaal)) turbo();
+  else springen();
 });
 window.addEventListener('keydown', e => {
   if (['Space', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
@@ -369,6 +376,7 @@ window.addEventListener('keydown', e => {
     return;
   }
   if ((e.code === 'Space' || e.code === 'ArrowUp') && !e.repeat) springen();
+  if ((e.code === 'KeyB' || e.code === 'ArrowRight') && !e.repeat) turbo();
   if (e.code === 'ArrowDown') { if (!omlaagIngedrukt) bukken(); omlaagIngedrukt = true; }
 });
 window.addEventListener('keyup', e => { if (e.code === 'ArrowDown') omlaagIngedrukt = false; });
@@ -504,7 +512,7 @@ function startLevel(n) {
   vloer = [{ x: -200, w: W + 900, h: 0 }];
   vloerAanvullen();
   rat.x = RAT_X; rat.y = G; rat.vy = 0; rat.opGrond = true; rat.vliegt = false; rat.dubbel = false; rat.bukken = 0;
-  snelheid = Math.max(INSTELLINGEN.startSnelheid + 40, snelheid * 0.85);
+  snelheid = INSTELLINGEN.startSnelheid;   // elk level begint met de gewone snelheid
   volgendObstakel = 1.6; volgendLekker = 0.3; tijdSindsGat = 0;
   if (n === 999) volgendSnoepje = 3;   // de eerste superkracht komt snel
   voet = { actief: false };
@@ -556,7 +564,7 @@ function startVoet() {
 // De voet trapt alleen als er verder niets aankomt, anders is het niet eerlijk
 function ietsDichtbij() {
   // vrij tot na de trap: aftellen + aanloop, en nog even om te landen
-  const van = rat.x - 60, tot = rat.x + snelheid * (INSTELLINGEN.aftellen + 0.9) + 60;
+  const van = rat.x - 60, tot = rat.x + snelheid * INSTELLINGEN.turboSnelheid * (INSTELLINGEN.aftellen + 0.9) + 60;
   if (rat.vliegt || !rat.opGrond) return true;
   if (dingen.some(o => o.x < tot && o.x + o.w > van)) return true;
   if (gaten.some(g => (g.trampX === null ? g.x : g.trampX) < tot && g.x + g.w > van)) return true;
@@ -678,12 +686,18 @@ function bijwerken(dt) {
 
   // tijdens de superkracht wordt het spel niet sneller, zodat je daarna weer je gewone snelheid hebt
   if (rat.boost <= 0) snelheid = Math.min(INSTELLINGEN.maxSnelheid, snelheid + INSTELLINGEN.versnelling * dt);
-  const dx = snelheid * (rat.boost > 0 ? INSTELLINGEN.boostSnelheid : 1) * dt;
+  const dx = snelheid * Math.max(rat.boost > 0 ? INSTELLINGEN.boostSnelheid : 1, rat.turbo > 0 ? INSTELLINGEN.turboSnelheid : 1) * dt;
+  rat.turbo = Math.max(0, rat.turbo - dt);
+  if (rat.turbo <= 0) rat.turboWacht = Math.max(0, rat.turboWacht - dt);
+  if (rat.turbo > 0 && Math.random() < 0.7) deeltjes.push({ x: rat.x - 30, y: rat.y - willekeurig(4, 24), vx: -260, vy: willekeurig(-20, 20), leven: 0.3, vuur: true });
   afstand += dx;
   scrollX += dx;
 
   // Superkracht en knipperen daarna; de Regenboog-rat heeft altijd superkracht
-  if (RATJES[gekozen].regenboog) rat.boost = Math.max(rat.boost, 1);
+  if (RATJES[gekozen].regenboog) {
+    rat.regenboogKlok -= dt;
+    if (rat.regenboogKlok <= 0) { rat.regenboogKlok = INSTELLINGEN.regenboogElke; startSuperkracht(rat.x + 20, rat.y - 30); }
+  }
   if (rat.boost > 0) {
     rat.boost -= dt;
     if (Math.random() < 0.6) deeltjes.push({ x: rat.x - 20, y: rat.y - willekeurig(5, 35), vx: -200, vy: willekeurig(-30, 30), leven: 0.4, regenboog: true });
@@ -814,16 +828,26 @@ function bijwerken(dt) {
   dingen = dingen.filter(o => !o.kapot);
 }
 
+function startSuperkracht(x, y) {
+  rat.boost = INSTELLINGEN.boostDuur;
+  rat.onkwetsbaar = 0;
+  deeltjes.push({ x, y: y - 10, vy: -50, leven: 1.2, tekst: 'SUPERKRACHT!', goud: true });
+  [523, 659, 784, 1047].forEach((t, i) => piep(t, 0.14, 'square', 0.06, 0, i * 0.08));
+  for (let i = 0; i < 16; i++) deeltjes.push({ x, y, vx: willekeurig(-200, 200), vy: willekeurig(-200, 100), leven: 0.7, regenboog: true });
+}
+// De boostknop: even extra snel rennen
+const KNOP = { r: 34 };
+const knopX = () => W - 58, knopY = () => H - 62;
+function opBoostKnop(x, y) { return Math.hypot(x - knopX(), y - knopY()) < KNOP.r + 12; }
+function turbo() {
+  if (toestand !== 'spelen' || rat.turbo > 0 || rat.turboWacht > 0) return;
+  rat.turbo = INSTELLINGEN.turboDuur;
+  rat.turboWacht = INSTELLINGEN.turboWacht;
+  piep(220, 0.35, 'sawtooth', 0.06, 880);
+}
 function pakLekker(l) {
   l.gepakt = true;
-  if (l.speciaal) {
-    rat.boost = INSTELLINGEN.boostDuur;
-    rat.onkwetsbaar = 0;
-    deeltjes.push({ x: l.x, y: l.y - 10, vy: -50, leven: 1.2, tekst: 'SUPERKRACHT!', goud: true });
-    [523, 659, 784, 1047].forEach((t, i) => piep(t, 0.14, 'square', 0.06, 0, i * 0.08));
-    for (let i = 0; i < 16; i++) deeltjes.push({ x: l.x, y: l.y, vx: willekeurig(-200, 200), vy: willekeurig(-200, 100), leven: 0.7, regenboog: true });
-    return;
-  }
+  if (l.speciaal) { startSuperkracht(l.x, l.y); return; }
   const punten = (l.goud ? INSTELLINGEN.puntenGoud : INSTELLINGEN.puntenLekker) * (rat.boost > 0 ? 2 : 1);
   score += punten;
   deeltjes.push({ x: l.x, y: l.y, vy: -70, leven: 0.8, tekst: '+' + punten, goud: l.goud });
@@ -2396,7 +2420,10 @@ function tekenLekker(l) {
 function tekenDeeltjes() {
   deeltjes.forEach(d => {
     ctx.globalAlpha = Math.min(1, d.leven * 2);
-    if (d.straling) {
+    if (d.vuur) {
+      ctx.fillStyle = Math.random() < 0.5 ? '#ff8a1f' : '#ffd23f';
+      ctx.beginPath(); ctx.arc(d.x, d.y, 3, 0, Math.PI * 2); ctx.fill();
+    } else if (d.straling) {
       ctx.fillStyle = '#8dff5a';
       ctx.beginPath(); ctx.arc(d.x, d.y, 2.5, 0, Math.PI * 2); ctx.fill();
     } else if (d.ster) {
@@ -2426,7 +2453,25 @@ function tekst(t, x, y, grootte, kleur = '#fff', uitlijnen = 'center', dik = tru
   ctx.fillText(t, x, y);
 }
 
+function tekenBoostKnop() {
+  const x = knopX(), y = knopY(), klaar = rat.turbo <= 0 && rat.turboWacht <= 0;
+  ctx.fillStyle = rat.turbo > 0 ? 'rgba(255,140,40,0.9)' : klaar ? 'rgba(255,90,40,0.85)' : 'rgba(60,40,30,0.7)';
+  ctx.beginPath(); ctx.arc(x, y, KNOP.r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = klaar ? '#ffd23f' : 'rgba(255,255,255,0.35)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(x, y, KNOP.r, 0, Math.PI * 2); ctx.stroke();
+  // rondje dat laat zien hoe lang de boost nog duurt, of hoe lang je nog moet wachten
+  if (!klaar) {
+    const deel = rat.turbo > 0 ? rat.turbo / INSTELLINGEN.turboDuur : 1 - rat.turboWacht / INSTELLINGEN.turboWacht;
+    ctx.strokeStyle = rat.turbo > 0 ? '#fff' : '#ffd23f'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.arc(x, y, KNOP.r - 1, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * deel); ctx.stroke();
+  }
+  tekst('🔥', x, y - 6, 22);
+  tekst(klaar ? 'BOOST' : rat.turbo > 0 ? 'ZOEF!' : Math.ceil(rat.turboWacht) + '', x, y + 17, 12, klaar ? '#fff' : '#ddd');
+}
+
 function tekenScore() {
+  if (toestand === 'spelen') tekenBoostKnop();
+  if (RATJES[gekozen].regenboog && rat.boost <= 0) tekst('🌈 super over ' + Math.ceil(rat.regenboogKlok) + ' s', W / 2, 74, 15, '#ffd0f0', 'center', false);
   tekst('🧀 ' + score, 18, 30, 26, '#ffe14d', 'left');
   tekst(Math.floor(afstand / 40) + ' m', W / 2, 30, 20, '#fff');
   tekst(level === 999 ? 'Level 999: het heelal' : ['', 'Level 1: de schatkamer', 'Level 2: het riool', 'Level 3: de keuken', 'Level 4: de kapsalon'][level], W / 2, 52, 13, level === 999 ? '#9ad8ff' : ['', '#ffd27a', '#9dff6a', '#ffb27a', '#ff8ad8'][level], 'center', false);
@@ -2441,8 +2486,8 @@ function tekenScore() {
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.fillRect(bx, by, bw, 12);
     ctx.fillStyle = 'hsl(' + Math.floor(tijd * 360) % 360 + ',100%,60%)';
-    ctx.fillRect(bx, by, bw * Math.min(1, RATJES[gekozen].regenboog ? 1 : rat.boost / INSTELLINGEN.boostDuur), 12);
-    tekst(RATJES[gekozen].regenboog ? '🌈 ALTIJD SUPERKRACHT  x2' : '🍭 SUPERKRACHT  x2', W / 2, by + 28, 16, '#fff');
+    ctx.fillRect(bx, by, bw * Math.min(1, rat.boost / INSTELLINGEN.boostDuur), 12);
+    tekst('🍭 SUPERKRACHT  x2', W / 2, by + 28, 16, '#fff');
   }
 }
 
