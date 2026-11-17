@@ -237,7 +237,7 @@ function springen() {
     for (let i = 0; i < 6; i++) deeltjes.push({ x: rat.x - 5, y: rat.y, vx: willekeurig(-90, 90), vy: willekeurig(20, 90), leven: 0.35, wolkje: true });
   } else if (regenboogRat() && !rat.derde && !rat.vliegt) {
     // de Regenboog-rat kan nog een derde keer springen
-    rat.vy = -INSTELLINGEN.dubbelSprongKracht;
+    rat.vy = -INSTELLINGEN.dubbelSprongKracht * 0.7;   // iets lager, anders vlieg je uit beeld
     rat.derde = true;
     rat.bukken = 0;
     piep(640, 0.18, 'square', 0.05, 1280);
