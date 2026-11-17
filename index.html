@@ -36,7 +36,7 @@
 </div>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 27
+//  KAAS ROYALE - versie 28
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -145,7 +145,7 @@ let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
 const ratLevel = k => k.level || 1;
 const recordVan = n => n === 999 ? record999 : [0, record, record2, record3, record4][n];
 const ratOpen = k => recordVan(ratLevel(k)) >= k.nodig;
-const VERSIE = 27;
+const VERSIE = 28;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
 let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= UITGANG(1);
 let level3Open = localStorage.getItem('kaasRoyaleLevel3') === '1' || record2 >= UITGANG(2);
@@ -336,7 +336,8 @@ function sluitCodeVak() {
 document.getElementById('codeWeg').addEventListener('click', sluitCodeVak);
 document.getElementById('codeForm').addEventListener('submit', e => {
   e.preventDefault();
-  const code = codeInvoer.value.trim().toLowerCase();   // spaties in het midden tellen mee
+  // kleine letters, en spaties en onzichtbare tekens die de telefoon soms toevoegt tellen niet mee
+  const code = codeInvoer.value.normalize('NFKC').toLowerCase().replace(/[\s\u200B-\u200D\u2060\uFEFF]/g, '');
   sluitCodeVak();
   if (code) controleerCode(code);
 });
@@ -357,10 +358,10 @@ function controleerCode(code) {
     startLevel(999);
     return;
   } else {
-    melding = '❌ Verkeerde code';
+    melding = '❌ Verkeerde code: "' + code + '"';
     piep(180, 0.2, 'square', 0.05);
   }
-  meldingTijd = 3;
+  meldingTijd = 4;
 }
 function tikBuitenSpel(x, y = H) {
   startAudio();
