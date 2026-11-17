@@ -36,7 +36,7 @@
 </div>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 24
+//  KAAS ROYALE - versie 25
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -145,7 +145,7 @@ let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
 const ratLevel = k => k.level || 1;
 const recordVan = n => n === 999 ? record999 : [0, record, record2, record3, record4][n];
 const ratOpen = k => recordVan(ratLevel(k)) >= k.nodig;
-const VERSIE = 24;
+const VERSIE = 25;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
 let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= UITGANG(1);
 let level3Open = localStorage.getItem('kaasRoyaleLevel3') === '1' || record2 >= UITGANG(2);
@@ -286,7 +286,7 @@ function buurSlide(stap) {
 }
 // Geheime code: tik 5 keer snel op de titel. Hier staat alleen een versleutelde versie van de code.
 const GEHEIM = '7cc7def1463d2b0d5caba1bfaefec6ab5294595b2b05d9e94998057825a9d5d4';
-const GEHEIM_999 = ['154480a5735c659b001105f80dde25765bcf08838fe921dee906b5a8f5d5bf03', 'cff9e6667dcb7f32e43c9998f8998a2118504ac8b566fbc82c8cfd904f9e231f'];
+const GEHEIM_999 = ['e35189a47ea3a956b384be785e526593797ab72bc716e6c00322190e50bebbc0'];   // precies zo, met de spaties
 let titelTikken = [];
 // Een eigen SHA-256, zodat de code op elke telefoon werkt (de code zelf staat nergens in het spel)
 function sha256(tekst) {
@@ -336,7 +336,7 @@ function sluitCodeVak() {
 document.getElementById('codeWeg').addEventListener('click', sluitCodeVak);
 document.getElementById('codeForm').addEventListener('submit', e => {
   e.preventDefault();
-  const code = codeInvoer.value.trim().toLowerCase().replace(/\s+/g, ' ');
+  const code = codeInvoer.value.trim().toLowerCase();   // spaties in het midden tellen mee
   sluitCodeVak();
   if (code) controleerCode(code);
 });
