@@ -36,7 +36,7 @@
 </div>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 26
+//  KAAS ROYALE - versie 27
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -45,7 +45,7 @@
 // ----- Getallen om mee te spelen: verander ze en kijk wat er gebeurt! -----
 const INSTELLINGEN = {
   startSnelheid: 260,      // hoe snel het ratje begint (pixels per seconde)
-  versnelling: 0,          // hoeveel sneller het elke seconde gaat (0 = altijd dezelfde snelheid)
+  versnelling: 5,          // hoeveel sneller het elke seconde gaat (de Regenboog-rat houdt altijd dezelfde snelheid)
   maxSnelheid: 650,        // sneller dan dit wordt het niet
   springKracht: 640,       // hoe hoog je springt
   dubbelSprongKracht: 650, // hoe hoog de tweede sprong in de lucht is
@@ -59,7 +59,7 @@ const INSTELLINGEN = {
   snoepjeElke: 18,         // om de hoeveel seconden er ongeveer een superlolly komt
   boostDuur: 5,            // hoeveel seconden de superkracht duurt
   boostSnelheid: 1.5,      // hoeveel keer zo snel je gaat met superkracht
-  turboDuur: 3,            // hoe lang de boostknop je extra snel maakt (seconden)
+  turboDuur: 3,            // hoe lang de boostknop (alleen voor de Regenboog-rat) je extra snel maakt (seconden)
   turboWacht: 5,           // hoe lang je daarna moet wachten voor de volgende boost
   turboSnelheid: 1.6,      // hoeveel keer zo snel je gaat met de boostknop
   regenboogElke: 22,       // de Regenboog-rat krijgt vanzelf superkracht, om de zoveel seconden
@@ -145,7 +145,7 @@ let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
 const ratLevel = k => k.level || 1;
 const recordVan = n => n === 999 ? record999 : [0, record, record2, record3, record4][n];
 const ratOpen = k => recordVan(ratLevel(k)) >= k.nodig;
-const VERSIE = 26;
+const VERSIE = 27;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
 let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= UITGANG(1);
 let level3Open = localStorage.getItem('kaasRoyaleLevel3') === '1' || record2 >= UITGANG(2);
@@ -577,7 +577,8 @@ function startLevel(n) {
   vloer = [{ x: -200, w: W + 900, h: 0 }];
   vloerAanvullen();
   rat.x = RAT_X; rat.y = G; rat.vy = 0; rat.opGrond = true; rat.vliegt = false; rat.dubbel = false; rat.bukken = 0;
-  snelheid = INSTELLINGEN.startSnelheid;   // elk level begint met de gewone snelheid
+  // de Regenboog-rat begint elk level met de gewone snelheid; de andere ratjes houden een beetje vaart
+  snelheid = regenboogRat() ? INSTELLINGEN.startSnelheid : Math.max(INSTELLINGEN.startSnelheid + 40, snelheid * 0.85);
   volgendObstakel = 1.6; volgendLekker = 0.3; tijdSindsGat = 0;
   if (n === 999) volgendSnoepje = 3;   // de eerste superkracht komt snel
   voet = { actief: false };
@@ -750,7 +751,7 @@ function bijwerken(dt) {
   if (toestand === 'af') { afSinds += dt; return; }
 
   // tijdens de superkracht wordt het spel niet sneller, zodat je daarna weer je gewone snelheid hebt
-  if (rat.boost <= 0) snelheid = Math.min(INSTELLINGEN.maxSnelheid, snelheid + INSTELLINGEN.versnelling * dt);
+  if (rat.boost <= 0 && !regenboogRat()) snelheid = Math.min(INSTELLINGEN.maxSnelheid, snelheid + INSTELLINGEN.versnelling * dt);
   const dx = snelheid * Math.max(rat.boost > 0 ? INSTELLINGEN.boostSnelheid : 1, rat.turbo > 0 ? INSTELLINGEN.turboSnelheid : 1) * dt;
   rat.turbo = Math.max(0, rat.turbo - dt);
   if (rat.turbo <= 0) rat.turboWacht = Math.max(0, rat.turboWacht - dt);
@@ -893,6 +894,8 @@ function bijwerken(dt) {
   dingen = dingen.filter(o => !o.kapot);
 }
 
+// De Regenboog-rat is speciaal: altijd dezelfde snelheid, een boostknop en vanzelf superkracht
+const regenboogRat = () => !!(RATJES[gekozen] && RATJES[gekozen].regenboog);
 function startSuperkracht(x, y) {
   rat.boost = INSTELLINGEN.boostDuur;
   rat.onkwetsbaar = 0;
@@ -903,9 +906,9 @@ function startSuperkracht(x, y) {
 // De boostknop: even extra snel rennen
 const KNOP = { r: 34 };
 const knopX = () => W - 58, knopY = () => H - 62;
-function opBoostKnop(x, y) { return Math.hypot(x - knopX(), y - knopY()) < KNOP.r + 12; }
+function opBoostKnop(x, y) { return regenboogRat() && Math.hypot(x - knopX(), y - knopY()) < KNOP.r + 12; }
 function turbo() {
-  if (toestand !== 'spelen' || rat.turbo > 0 || rat.turboWacht > 0) return;
+  if (toestand !== 'spelen' || !regenboogRat() || rat.turbo > 0 || rat.turboWacht > 0) return;
   rat.turbo = INSTELLINGEN.turboDuur;
   rat.turboWacht = INSTELLINGEN.turboWacht;
   piep(220, 0.35, 'sawtooth', 0.06, 880);
@@ -2535,7 +2538,7 @@ function tekenBoostKnop() {
 }
 
 function tekenScore() {
-  if (toestand === 'spelen') tekenBoostKnop();
+  if (toestand === 'spelen' && regenboogRat()) tekenBoostKnop();
   if (RATJES[gekozen].regenboog && rat.boost <= 0) tekst('🌈 super over ' + Math.ceil(rat.regenboogKlok) + ' s', W / 2, 74, 15, '#ffd0f0', 'center', false);
   tekst('🧀 ' + score, 18, 30, 26, '#ffe14d', 'left');
   tekst(Math.floor(afstand / 40) + ' m', W / 2, 30, 20, '#fff');
