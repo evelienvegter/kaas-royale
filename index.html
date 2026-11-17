@@ -36,7 +36,7 @@
 </div>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 29
+//  KAAS ROYALE - versie 30
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -45,7 +45,7 @@
 // ----- Getallen om mee te spelen: verander ze en kijk wat er gebeurt! -----
 const INSTELLINGEN = {
   startSnelheid: 260,      // hoe snel het ratje begint (pixels per seconde)
-  versnelling: 5,          // hoeveel sneller het elke seconde gaat (de Regenboog-rat houdt altijd dezelfde snelheid)
+  versnelling: 5,          // hoeveel sneller het elke seconde gaat
   maxSnelheid: 650,        // sneller dan dit wordt het niet
   springKracht: 640,       // hoe hoog je springt
   dubbelSprongKracht: 650, // hoe hoog de tweede sprong in de lucht is
@@ -145,7 +145,7 @@ let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
 const ratLevel = k => k.level || 1;
 const recordVan = n => n === 999 ? record999 : [0, record, record2, record3, record4][n];
 const ratOpen = k => recordVan(ratLevel(k)) >= k.nodig;
-const VERSIE = 29;
+const VERSIE = 30;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
 let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= UITGANG(1);
 let level3Open = localStorage.getItem('kaasRoyaleLevel3') === '1' || record2 >= UITGANG(2);
@@ -225,7 +225,7 @@ function springen() {
     rat.vy = -INSTELLINGEN.springKracht;
     rat.opGrond = false;
     rat.coyote = 0;
-    rat.dubbel = false;
+    rat.dubbel = false; rat.derde = false;
     rat.bukken = 0;
     piep(320, 0.15, 'square', 0.05, 640);
   } else if (!rat.dubbel) {
@@ -235,6 +235,13 @@ function springen() {
     rat.bukken = 0;
     piep(480, 0.15, 'square', 0.05, 960);
     for (let i = 0; i < 6; i++) deeltjes.push({ x: rat.x - 5, y: rat.y, vx: willekeurig(-90, 90), vy: willekeurig(20, 90), leven: 0.35, wolkje: true });
+  } else if (regenboogRat() && !rat.derde && !rat.vliegt) {
+    // de Regenboog-rat kan nog een derde keer springen
+    rat.vy = -INSTELLINGEN.dubbelSprongKracht;
+    rat.derde = true;
+    rat.bukken = 0;
+    piep(640, 0.18, 'square', 0.05, 1280);
+    for (let i = 0; i < 10; i++) deeltjes.push({ x: rat.x - 5, y: rat.y, vx: willekeurig(-120, 120), vy: willekeurig(20, 120), leven: 0.45, regenboog: true });
   } else {
     springBuffer = 0.12; // net te vroeg getikt? dan springt hij zodra hij landt
   }
@@ -577,9 +584,8 @@ function startLevel(n) {
   dingen = []; lekkers = []; gaten = []; deeltjes = [];
   vloer = [{ x: -200, w: W + 900, h: 0 }];
   vloerAanvullen();
-  rat.x = RAT_X; rat.y = G; rat.vy = 0; rat.opGrond = true; rat.vliegt = false; rat.dubbel = false; rat.bukken = 0;
-  // de Regenboog-rat begint elk level met de gewone snelheid; de andere ratjes houden een beetje vaart
-  snelheid = regenboogRat() ? INSTELLINGEN.startSnelheid : Math.max(INSTELLINGEN.startSnelheid + 40, snelheid * 0.85);
+  rat.x = RAT_X; rat.y = G; rat.vy = 0; rat.opGrond = true; rat.vliegt = false; rat.dubbel = false; rat.derde = false; rat.bukken = 0;
+  snelheid = Math.max(INSTELLINGEN.startSnelheid + 40, snelheid * 0.85);   // je houdt een beetje vaart
   volgendObstakel = 1.6; volgendLekker = 0.3; tijdSindsGat = 0;
   if (n === 999) volgendSnoepje = 3;   // de eerste superkracht komt snel
   voet = { actief: false };
@@ -752,7 +758,7 @@ function bijwerken(dt) {
   if (toestand === 'af') { afSinds += dt; return; }
 
   // tijdens de superkracht wordt het spel niet sneller, zodat je daarna weer je gewone snelheid hebt
-  if (rat.boost <= 0 && !regenboogRat()) snelheid = Math.min(INSTELLINGEN.maxSnelheid, snelheid + INSTELLINGEN.versnelling * dt);
+  if (rat.boost <= 0) snelheid = Math.min(INSTELLINGEN.maxSnelheid, snelheid + INSTELLINGEN.versnelling * dt);
   const dx = snelheid * Math.max(rat.boost > 0 ? INSTELLINGEN.boostSnelheid : 1, rat.turbo > 0 ? INSTELLINGEN.turboSnelheid : 1) * dt;
   rat.turbo = Math.max(0, rat.turbo - dt);
   if (rat.turbo <= 0) rat.turboWacht = Math.max(0, rat.turboWacht - dt);
@@ -783,7 +789,7 @@ function bijwerken(dt) {
   const steun = Math.min(grondY(rat.x - 10), grondY(rat.x + 30));
   // landen kan alleen als je vlak hiervoor nog boven de vloer was (anders zit je al in een gat)
   if (rat.y >= steun && vorigeY <= steun + 2) {
-    rat.y = steun; rat.vy = 0; rat.opGrond = true; rat.dubbel = false; rat.vliegt = false;
+    rat.y = steun; rat.vy = 0; rat.opGrond = true; rat.dubbel = false; rat.derde = false; rat.vliegt = false;
     if (springBuffer > 0) { springBuffer = 0; springen(); }
   }
   if (rat.y > H + 40) { af('gat'); return; }
@@ -793,7 +799,7 @@ function bijwerken(dt) {
   if (!boveGat(voorX) && vloerY(voorX) < rat.y - 4) {
     const bijnaBoven = rat.y - vloerY(voorX) <= 24 && rat.vy >= 0;   // net te laag geland? dan klautert hij erop
     if (rat.boost > 0 || rat.onkwetsbaar > 0 || bijnaBoven) {
-      rat.y = vloerY(voorX); rat.vy = 0; rat.opGrond = true; rat.dubbel = false; rat.vliegt = false;
+      rat.y = vloerY(voorX); rat.vy = 0; rat.opGrond = true; rat.dubbel = false; rat.derde = false; rat.vliegt = false;
     }
     else { af(boveGat(rat.x) || boveGat(rat.x - 10) ? 'gat' : 'muur'); return; }
   }
@@ -895,7 +901,7 @@ function bijwerken(dt) {
   dingen = dingen.filter(o => !o.kapot);
 }
 
-// De Regenboog-rat is speciaal: altijd dezelfde snelheid, een boostknop en vanzelf superkracht
+// De Regenboog-rat is speciaal: een boostknop, drie keer springen en vanzelf superkracht
 const regenboogRat = () => !!(RATJES[gekozen] && RATJES[gekozen].regenboog);
 function startSuperkracht(x, y) {
   rat.boost = INSTELLINGEN.boostDuur;
