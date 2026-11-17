@@ -15,13 +15,28 @@
   html, body { margin: 0; height: 100%; background: #2a1606; overflow: hidden;
     touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   canvas { display: block; width: 100vw; height: 100vh; height: 100dvh; }
+  /* het invulvak voor de geheime code */
+  #codeVak { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(10,4,0,0.75); }
+  #codeVak[hidden] { display: none; }
+  #codeVak form { background: #3d2108; border: 3px solid #ffcc33; border-radius: 16px; padding: 18px; display: flex; gap: 10px; align-items: center; }
+  #codeVak input { font: 700 20px system-ui, sans-serif; padding: 10px 12px; border-radius: 10px; border: 0; width: 210px;
+    -webkit-user-select: text; user-select: text; }
+  #codeVak button { font: 800 18px system-ui, sans-serif; padding: 10px 14px; border-radius: 10px; border: 0; background: #ffcc33; color: #2a1200; }
+  #codeVak button.weg { background: #6b4a2a; color: #fff; }
 </style>
 </head>
 <body>
 <canvas id="spel"></canvas>
+<div id="codeVak" hidden>
+  <form id="codeForm" autocomplete="off">
+    <input id="codeInvoer" type="text" placeholder="Geheime code" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go">
+    <button type="submit">OK</button>
+    <button type="button" class="weg" id="codeWeg">✕</button>
+  </form>
+</div>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 23
+//  KAAS ROYALE - versie 24
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -130,7 +145,7 @@ let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
 const ratLevel = k => k.level || 1;
 const recordVan = n => n === 999 ? record999 : [0, record, record2, record3, record4][n];
 const ratOpen = k => recordVan(ratLevel(k)) >= k.nodig;
-const VERSIE = 23;
+const VERSIE = 24;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
 let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= UITGANG(1);
 let level3Open = localStorage.getItem('kaasRoyaleLevel3') === '1' || record2 >= UITGANG(2);
@@ -273,11 +288,60 @@ function buurSlide(stap) {
 const GEHEIM = '7cc7def1463d2b0d5caba1bfaefec6ab5294595b2b05d9e94998057825a9d5d4';
 const GEHEIM_999 = ['154480a5735c659b001105f80dde25765bcf08838fe921dee906b5a8f5d5bf03', 'cff9e6667dcb7f32e43c9998f8998a2118504ac8b566fbc82c8cfd904f9e231f'];
 let titelTikken = [];
-async function vraagGeheimeCode() {
-  const code = (window.prompt('Geheime code?') || '').trim().toLowerCase();
-  if (!code || !window.crypto || !crypto.subtle) return;
-  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(code));
-  const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+// Een eigen SHA-256, zodat de code op elke telefoon werkt (de code zelf staat nergens in het spel)
+function sha256(tekst) {
+  const rotr = (v, n) => (v >>> n) | (v << (32 - n));
+  const K = [], begin = [];
+  const priem = x => { for (let d = 2; d * d <= x; d++) if (x % d === 0) return false; return true; };
+  for (let p = 2, n = 0; n < 64; p++) {
+    if (!priem(p)) continue;
+    if (n < 8) begin[n] = (Math.pow(p, 1 / 2) * 4294967296) | 0;
+    K[n++] = (Math.pow(p, 1 / 3) * 4294967296) | 0;
+  }
+  let bytes = unescape(encodeURIComponent(tekst));
+  const lengte = bytes.length * 8;
+  bytes += '\x80';
+  while (bytes.length % 64 - 56) bytes += '\x00';
+  const woorden = [];
+  for (let i = 0; i < bytes.length; i++) woorden[i >> 2] |= bytes.charCodeAt(i) << ((3 - i) % 4) * 8;
+  woorden.push((lengte / 4294967296) | 0, lengte | 0);
+  const hash = begin.slice();
+  for (let j = 0; j < woorden.length;) {
+    const w = woorden.slice(j, j += 16), oud = hash.slice();
+    for (let i = 0; i < 64; i++) {
+      const w15 = w[i - 15], w2 = w[i - 2], a = hash[0], e = hash[4];
+      if (i >= 16) w[i] = (w[i - 16] + (rotr(w15, 7) ^ rotr(w15, 18) ^ (w15 >>> 3)) + w[i - 7] + (rotr(w2, 17) ^ rotr(w2, 19) ^ (w2 >>> 10))) | 0;
+      const t1 = hash[7] + (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) + ((e & hash[5]) ^ (~e & hash[6])) + K[i] + (w[i] | 0);
+      const t2 = (rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) + ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
+      hash.unshift((t1 + t2) | 0);
+      hash[4] = (hash[4] + t1) | 0;
+      hash.length = 8;
+    }
+    for (let i = 0; i < 8; i++) hash[i] = (hash[i] + oud[i]) | 0;
+  }
+  return hash.map(x => (x >>> 0).toString(16).padStart(8, '0')).join('');
+}
+
+const codeVak = document.getElementById('codeVak');
+const codeInvoer = document.getElementById('codeInvoer');
+function vraagGeheimeCode() {
+  codeInvoer.value = '';
+  codeVak.hidden = false;
+  codeInvoer.focus();
+}
+function sluitCodeVak() {
+  codeVak.hidden = true;
+  codeInvoer.blur();
+}
+document.getElementById('codeWeg').addEventListener('click', sluitCodeVak);
+document.getElementById('codeForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const code = codeInvoer.value.trim().toLowerCase().replace(/\s+/g, ' ');
+  sluitCodeVak();
+  if (code) controleerCode(code);
+});
+function controleerCode(code) {
+  const hex = sha256(code);
   if (hex === GEHEIM) {
     openLevel(2); openLevel(3); openLevel(4);
     melding = '🔓 Geheime code! Alle levels zijn open';
@@ -364,6 +428,7 @@ canvas.addEventListener('mousedown', e => {
   else springen();
 });
 window.addEventListener('keydown', e => {
+  if (e.target && e.target.tagName === 'INPUT') return;   // typen in het invulvak
   if (['Space', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
   if (toestand !== 'spelen') {
     const cijfer = Number(e.key);
