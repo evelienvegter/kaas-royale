@@ -36,7 +36,7 @@
 </div>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 32
+//  KAAS ROYALE - versie 33
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -137,7 +137,7 @@ let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
 const ratLevel = k => k.level || 1;
 const recordVan = n => [0, record, record2, record3, record4][n];
 const ratOpen = k => recordVan(ratLevel(k)) >= k.nodig;
-const VERSIE = 32;
+const VERSIE = 33;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
 let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= UITGANG(1);
 let level3Open = localStorage.getItem('kaasRoyaleLevel3') === '1' || record2 >= UITGANG(2);
@@ -273,7 +273,7 @@ function buurSlide(stap) {
   return lijst[i + stap];
 }
 // Geheime code. Hier staat alleen een versleutelde versie van het wachtwoord.
-const GEHEIM = '2e5303c4fd7225bc1561f4945f5e458b35e36f4ccd2a31426a375339e97e66ff';
+const GEHEIM = 'f47ea9fa593b0433959efa3e9c37c0d5ba33cde8db619703b10cd03cc9e0b122';
 let titelTikken = [];
 // Een eigen SHA-256, zodat de code op elke telefoon werkt (de code zelf staat nergens in het spel)
 function sha256(tekst) {
