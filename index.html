@@ -36,7 +36,7 @@
 </div>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 31
+//  KAAS ROYALE - versie 32
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -137,7 +137,7 @@ let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
 const ratLevel = k => k.level || 1;
 const recordVan = n => [0, record, record2, record3, record4][n];
 const ratOpen = k => recordVan(ratLevel(k)) >= k.nodig;
-const VERSIE = 31;
+const VERSIE = 32;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
 let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= UITGANG(1);
 let level3Open = localStorage.getItem('kaasRoyaleLevel3') === '1' || record2 >= UITGANG(2);
@@ -272,8 +272,8 @@ function buurSlide(stap) {
   const lijst = slideLijst(), i = lijst.indexOf(slide);
   return lijst[i + stap];
 }
-// Geheime code: tik 5 keer snel op de titel. Hier staat alleen een versleutelde versie van de code.
-const GEHEIM = '7cc7def1463d2b0d5caba1bfaefec6ab5294595b2b05d9e94998057825a9d5d4';
+// Geheime code. Hier staat alleen een versleutelde versie van het wachtwoord.
+const GEHEIM = '2e5303c4fd7225bc1561f4945f5e458b35e36f4ccd2a31426a375339e97e66ff';
 let titelTikken = [];
 // Een eigen SHA-256, zodat de code op elke telefoon werkt (de code zelf staat nergens in het spel)
 function sha256(tekst) {
@@ -332,17 +332,16 @@ function controleerCode(code) {
   const hex = sha256(code);
   if (hex === GEHEIM) {
     openLevel(2); openLevel(3); openLevel(4);
-    melding = '🔓 Geheime code! Alle levels zijn open';
+    melding = '🔓 Alle levels zijn open';
     [523, 659, 784, 1047].forEach((t, i) => piep(t, 0.14, 'square', 0.06, 0, i * 0.08));
   } else {
-    melding = '❌ Verkeerde code: "' + code + '"';
-    piep(180, 0.2, 'square', 0.05);
+    return;   // verkeerde code: er gebeurt niets, zodat niemand ziet dat er een code bestaat
   }
   meldingTijd = 4;
 }
 function tikBuitenSpel(x, y = H) {
   startAudio();
-  if (toestand === 'menu' && y < 118) {   // de titel en de zin eronder
+  if (toestand === 'menu' && x > W - 110 && y > H - 34) {   // het kleine versienummer rechtsonder
     const nu = performance.now();
     titelTikken = titelTikken.filter(t => nu - t < 2500).concat(nu);
     if (titelTikken.length >= 5) { titelTikken = []; vraagGeheimeCode(); }
