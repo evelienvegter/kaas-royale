@@ -36,7 +36,7 @@
 </div>
 <script>
 // =====================================================================
-//  KAAS ROYALE - versie 33
+//  KAAS ROYALE - versie 34
 //  Een ratje rent door een schatkamer vol lekkers.
 //  Tik = springen, 2x tikken = hoger springen, veeg omlaag = bukken.
 //  Op de computer: spatie of pijltje omhoog = springen, pijltje omlaag = bukken.
@@ -137,18 +137,23 @@ let gekozen = Number(localStorage.getItem('kaasRoyaleRatje')) || 0;
 const ratLevel = k => k.level || 1;
 const recordVan = n => [0, record, record2, record3, record4][n];
 const ratOpen = k => recordVan(ratLevel(k)) >= k.nodig;
-const VERSIE = 33;
+const VERSIE = 34;
 // level 2 blijft open: ook als je record ooit hoog genoeg was
-let level2Open = localStorage.getItem('kaasRoyaleLevel2') === '1' || record >= UITGANG(1);
-let level3Open = localStorage.getItem('kaasRoyaleLevel3') === '1' || record2 >= UITGANG(2);
-let level4Open = localStorage.getItem('kaasRoyaleLevel4') === '1' || record3 >= UITGANG(3);
+// Een level is open als je het verdiend hebt (je record in het level ervoor), of met het wachtwoord.
+// Levels die met een oud wachtwoord waren geopend tellen niet meer mee.
+['kaasRoyaleLevel2', 'kaasRoyaleLevel3', 'kaasRoyaleLevel4', 'kaasRoyaleLevel999', 'kaasRoyaleRecord999'].forEach(k => localStorage.removeItem(k));
+const metWachtwoord = localStorage.getItem('kaasRoyaleSleutel') === '1';
+let level2Open = metWachtwoord || record >= UITGANG(1);
+let level3Open = metWachtwoord || record2 >= UITGANG(2);
+let level4Open = metWachtwoord || record3 >= UITGANG(3);
 const hoogsteSlide = () => level4Open ? 4 : level3Open ? 3 : level2Open ? 2 : 1;
 // Vraag de browser om de opgeslagen punten en levels nooit zomaar op te ruimen
 if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 function openLevel(n) {
-  if (n === 2 && !level2Open) { level2Open = true; localStorage.setItem('kaasRoyaleLevel2', '1'); }
-  if (n === 3 && !level3Open) { level3Open = true; localStorage.setItem('kaasRoyaleLevel3', '1'); }
-  if (n === 4 && !level4Open) { level4Open = true; localStorage.setItem('kaasRoyaleLevel4', '1'); }
+  // het spel onthoudt dit via je record; zie hierboven
+  if (n === 2) level2Open = true;
+  if (n === 3) level3Open = true;
+  if (n === 4) level4Open = true;
   // de volgende keer begin je in het hoogste level dat je gehaald hebt
   if (n > (Number(localStorage.getItem('kaasRoyaleStartLevel')) || 1)) { slide = n; localStorage.setItem('kaasRoyaleStartLevel', String(n)); }
 }
@@ -331,6 +336,7 @@ document.getElementById('codeForm').addEventListener('submit', e => {
 function controleerCode(code) {
   const hex = sha256(code);
   if (hex === GEHEIM) {
+    localStorage.setItem('kaasRoyaleSleutel', '1');
     openLevel(2); openLevel(3); openLevel(4);
     melding = '🔓 Alle levels zijn open';
     [523, 659, 784, 1047].forEach((t, i) => piep(t, 0.14, 'square', 0.06, 0, i * 0.08));
